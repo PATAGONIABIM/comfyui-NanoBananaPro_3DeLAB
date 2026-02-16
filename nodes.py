@@ -103,11 +103,7 @@ class GeminiNanoBananaPro:
     RETURN_NAMES = ("images", "response_text")
     FUNCTION = "generate"
     CATEGORY = "3DELAB"
-
-    RETURN_NAMES = ("images", "response_text")
-    FUNCTION = "generate"
-    CATEGORY = "3DELAB"
-    COLOR = "#FF0000"
+    COLOR = "#940000"
 
     def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, files=None, system_prompt=""):
         # Defaults for hidden inputs
