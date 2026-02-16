@@ -7,7 +7,8 @@ app.registerExtension({
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
-                this.bgcolor = "#940000";
+                this.bgcolor = "#2d0000ff";
+                this.color = "#000000";
                 return r;
             };
         }
