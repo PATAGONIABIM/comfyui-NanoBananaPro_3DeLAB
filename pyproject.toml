@@ -1,0 +1,42 @@
+[project]
+name = "NanoBananaPro3_Direct"
+description = "Gemini 3 Pro & Vertex AI Imagen 3 Node for ComfyUI image generation|inpaint|outpaint|background swap"
+version = "1.0.0"
+license = {file = "LICENSE"} 
+requires-python = ">=3.10"
+dependencies = [
+    # Static dependencies can go here if needed, but we use dynamic
+    # "comfyui-frontend-package<=1.21.6" # Example
+]
+classifiers = [
+    # For OS-independent nodes (works on all operating systems)
+    "Operating System :: OS Independent",
+
+    # OR for OS-specific nodes, specify the supported systems:
+    "Operating System :: Microsoft :: Windows",  # Windows specific
+    "Operating System :: POSIX :: Linux",  # Linux specific
+    "Operating System :: MacOS",  # macOS specific
+
+    # GPU Accelerator support. Pick the ones that are supported by your extension.
+    "Environment :: GPU :: NVIDIA CUDA",    # NVIDIA CUDA support
+    "Environment :: GPU :: AMD ROCm",       # AMD ROCm support
+    "Environment :: GPU :: Intel Arc",      # Intel Arc support
+    "Environment :: NPU :: Huawei Ascend",  # Huawei Ascend support
+    "Environment :: GPU :: Apple Metal",    # Apple Metal support
+]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+Repository = "https://github.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB"
+#  Used by Comfy Registry https://registry.comfy.org
+Documentation = "https://github.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB/blob/main/README.md"
+"Bug Tracker" = "https://github.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB/issues"
+
+[tool.comfy]
+PublisherId = "nenu"
+DisplayName = "NanoBananaPro_3DeLAB"
+Icon = "https://github.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB/blob/main/icon.png?raw=true"
+# Banner = "" # No banner provided yet
