@@ -86,11 +86,11 @@ class GeminiNanoBananaPro:
                     "default": "IMAGE",
                     "tooltip": "Choose image only or image + reasoning text."
                 }),
-                "files": ("STRING", {
-                    "multiline": True, 
-                    "placeholder": "Path to local file (PDF/TXT)",
-                    "tooltip": "Path to local text or PDF files to use as context."
-                }),
+                # "files": ("STRING", {
+                #     "multiline": True, 
+                #     "placeholder": "Path to local file (PDF/TXT)",
+                #     "tooltip": "Path to local text or PDF files to use as context."
+                # }),
                 "system_prompt": ("STRING", {
                     "multiline": True,
                     "default": "You are an expert image-generation engine. You must ALWAYS produce an image.",
