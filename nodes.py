@@ -51,24 +51,24 @@ class GeminiNanoBananaPro:
                 }),
                 "model": (["gemini-3-pro-image-preview", "imagen-3.0-capability-001", "imagen-3.0-generate-001", "imagen-4.0-generate-001"], {
                     "default": "gemini-3-pro-image-preview",
-                    "tooltip": "Select the AI model to use (Gemini 3 Pro or Imagen 3 variants)."
+                    "tooltip": "Select the AI model to use (API Key for Gemini 3 Pro to generate | JSON Key for Imagen variants for Inpaint, Outpaint, Background Swap)."
                 }),
                 "operation": (["GENERATE", "INPAINT_INSERTION", "INPAINT_REMOVAL", "OUTPAINT", "BACKGROUND_SWAP"], {
                     "default": "GENERATE",
-                    "tooltip": "Choose the operation mode: GEN (Txt2Img), INPAINT (Edit), OUTPAINT (Expand), BG_SWAP."
+                    "tooltip": "Choose the operation mode: GEN (TXT2IMG|IMG2IMG|MULTIREFERENCE), INPAINT (Edit|Remove), OUTPAINT, BG_SWAP."
                 }),
             },
             "optional": {
                 "api_key": ("STRING", {
                     "multiline": False,
                     "default": "",
-                    "placeholder": "Gemini API Key (AI Studio) - For Gemini Models",
+                    "placeholder": "Gemini API Key (AI Studio) - For Gemini 3 Pro model",
                     "tooltip": "Your Google AI Studio API Key. Required for Gemini models."
                 }),
                 "service_account_json": ("STRING", {
                     "multiline": False,
                     "default": "",
-                    "placeholder": "Path to JSON Key (Vertex AI) - For Imagen Models",
+                    "placeholder": "Path to JSON Key (Vertex AI) - For Imagen variants models",
                     "tooltip": "Absolute path to your Vertex AI Service Account JSON key file. Required for Imagen 3 editing/inpainting."
                 }),
                 "images": ("IMAGE", {"tooltip": "Input image for editing, inpainting, or image-to-image generation."}),
