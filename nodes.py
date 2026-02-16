@@ -47,32 +47,54 @@ class GeminiNanoBananaPro:
                 "prompt": ("STRING", {
                     "multiline": True,
                     "default": "Describe the image you want to generate...",
+                    "tooltip": "The text description of the image you want to generate."
                 }),
-                "model": (["gemini-3-pro-image-preview", "imagen-3.0-capability-001", "imagen-3.0-generate-001", "imagen-4.0-generate-001"], {"default": "gemini-3-pro-image-preview"}),
-                "operation": (["GENERATE", "INPAINT_INSERTION", "INPAINT_REMOVAL", "OUTPAINT", "BACKGROUND_SWAP"], {"default": "GENERATE"}),
+                "model": (["gemini-3-pro-image-preview", "imagen-3.0-capability-001", "imagen-3.0-generate-001", "imagen-4.0-generate-001"], {
+                    "default": "gemini-3-pro-image-preview",
+                    "tooltip": "Select the AI model to use (Gemini 3 Pro or Imagen 3 variants)."
+                }),
+                "operation": (["GENERATE", "INPAINT_INSERTION", "INPAINT_REMOVAL", "OUTPAINT", "BACKGROUND_SWAP"], {
+                    "default": "GENERATE",
+                    "tooltip": "Choose the operation mode: GEN (Txt2Img), INPAINT (Edit), OUTPAINT (Expand), BG_SWAP."
+                }),
             },
             "optional": {
                 "api_key": ("STRING", {
                     "multiline": False,
                     "default": "",
-                    "placeholder": "Gemini API Key (AI Studio) - For Gemini Models"
+                    "placeholder": "Gemini API Key (AI Studio) - For Gemini Models",
+                    "tooltip": "Your Google AI Studio API Key. Required for Gemini models."
                 }),
                 "service_account_json": ("STRING", {
                     "multiline": False,
                     "default": "",
-                    "placeholder": "Path to JSON Key (Vertex AI) - For Imagen Models"
+                    "placeholder": "Path to JSON Key (Vertex AI) - For Imagen Models",
+                    "tooltip": "Absolute path to your Vertex AI Service Account JSON key file. Required for Imagen 3 editing/inpainting."
                 }),
-                "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"], {"default": "1:1"}),
-                "images": ("IMAGE",),
-                "mask": ("MASK",),
-                "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff}),
-                "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"], {"default": "1:1"}),
-                "resolution": (["1K", "2K", "4K"], {"default": "1K"}),
-                "response_modalities": (["IMAGE", "IMAGE+TEXT"], {"default": "IMAGE"}),
-                "files": ("STRING", {"multiline": True, "placeholder": "Path to local file (PDF/TXT)"}),
+                "images": ("IMAGE", {"tooltip": "Input image for editing, inpainting, or image-to-image generation."}),
+                "mask": ("MASK", {"tooltip": "Mask image for inpainting (white = edit, black = keep)."}),
+                "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Seed for random number generation."}),
+                "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"], {
+                    "default": "1:1",
+                    "tooltip": "The aspect ratio of the generated image."
+                }),
+                "resolution": (["1K", "2K", "4K"], {
+                    "default": "1K",
+                    "tooltip": "Resolution of the output image (1K, 2K, 4K)."
+                }),
+                "response_modalities": (["IMAGE", "IMAGE+TEXT"], {
+                    "default": "IMAGE",
+                    "tooltip": "Choose image only or image + reasoning text."
+                }),
+                "files": ("STRING", {
+                    "multiline": True, 
+                    "placeholder": "Path to local file (PDF/TXT)",
+                    "tooltip": "Path to local text or PDF files to use as context."
+                }),
                 "system_prompt": ("STRING", {
                     "multiline": True,
                     "default": "You are an expert image-generation engine. You must ALWAYS produce an image.",
+                    "tooltip": "System-level instructions to guide the model's behavior."
                 }),
             }
         }
