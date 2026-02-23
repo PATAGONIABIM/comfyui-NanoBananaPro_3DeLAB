@@ -6,7 +6,7 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 
 ---
 
-## 🇺🇸 English
+## 🇺🇸 English (v1.1.0)
 
 ### Features
 - **Unlocks Gemini 3 Pro** via `google-genai` library (replacing standard REST API).
@@ -14,6 +14,7 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 - Hybrid 1:1 Authentication:
   - **API Key (Google AI Studio)**: Required for standard Image Generation.
   - **Service Account JSON (Vertex AI)**: Required for Image Editing and Inpainting operations.
+- **NEW: Load Image & Scribble Editor Node**: A custom node featuring an integrated HTML5 canvas to draw vector arrows, text, and raster scribbles directly over your images to generate precise `scribble_mask` inputs.
 
 ### Installation
 1. Navigate to your ComfyUI custom nodes directory:
@@ -48,19 +49,19 @@ To use the node, you need to provide authentication credentials in the node inpu
 - **model**: Select the AI model to use (Gemini 3 Pro or Imagen 3 variants).
 - **operation**: Choose the operation mode: Generate, Inpaint (Insert/Remove), Outpaint, or Background Swap.
 - **api_key**: Your Google AI Studio API Key. Required for Gemini models.
-- **service_account_json**: Absolute path to your Vertex AI Service Account JSON key file. Required for Imagen 3 editing/inpainting.
+- **service_account_json**: Absolute path to your Vertex AI Service Account JSON key file. Required for editing/inpainting.
 - **aspect_ratio**: The aspect ratio of the generated image (e.g., 1:1, 16:9).
 - **images**: Input image for editing, inpainting, or image-to-image generation.
 - **mask**: Mask image for inpainting (white = edit, black = keep).
+- **scribble_mask**: Scribble or sketch image (transparent BG) for controlled editing. Best generated using the included `Load Image & Scribble Editor` node.
 - **seed**: Seed for random number generation. Use -1 or slightly change for variation.
 - **resolution**: Resolution of the output image (1K, 2K, 4K).
 - **response_modalities**: Choose strictly image output or image + text reasoning (if supported).
-- **files**: Path to local text or PDF files to use as context.
 - **system_prompt**: System-level instructions to guide the model's behavior.
 
 ---
 
-## 🇪🇸 Español
+## 🇪🇸 Español (v1.1.0)
 
 ### Características
 - **Desbloquea Gemini 3 Pro** a través de la librería `google-genai` (reemplazo de API REST estándar).
@@ -68,6 +69,7 @@ To use the node, you need to provide authentication credentials in the node inpu
 - Autenticación Híbrida 1:1:
   - **API Key (Google AI Studio)**: Necesaria para la Generación de Imágenes estándar.
   - **Service Account JSON (Vertex AI)**: Necesaria para operaciones de Edición de Imágenes e Inpainting.
+- **NUEVO: Nodo Load Image & Scribble Editor**: Un nodo personalizado que integra un Canvas HTML5 para dibujar flechas vectoriales, texto y trazos libres directamente sobre tus imágenes para generar entradas `scribble_mask` precisas.
 
 ### Instalación
 1. Navega a tu directorio de nodos personalizados de ComfyUI:
@@ -106,8 +108,8 @@ Para usar el nodo, debes proporcionar las credenciales de autenticación en las 
 - **aspect_ratio**: La relación de aspecto de la imagen generada (ej. 1:1, 16:9).
 - **images**: Imagen de entrada para edición, inpainting o generación imagen-a-imagen.
 - **mask**: Imagen de máscara para inpainting (blanco = editar, negro = mantener).
+- **scribble_mask**: Imagen de garabato o boceto (con fondo transparente) para edición controlada. Se genera idealmente usando el nodo incluido `Load Image & Scribble Editor`.
 - **seed**: Semilla para generación de números aleatorios. Usa -1 o cambia ligeramente para variaciones.
 - **resolution**: Resolución de la imagen de salida (1K, 2K, 4K).
 - **response_modalities**: Elige salida estrictamente de imagen o imagen + texto de razonamiento (si está soportado).
-- **files**: Ruta a archivos de texto o PDF locales para usar como contexto.
 - **system_prompt**: Instrucciones a nivel de sistema para guiar el comportamiento del modelo.

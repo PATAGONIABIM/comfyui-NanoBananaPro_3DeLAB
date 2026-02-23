@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 import base64
 import requests
@@ -24,6 +24,9 @@ try:
         RawReferenceImage,
         MaskReferenceImage,
         MaskReferenceConfig,
+        ControlReferenceImage,
+        ControlReferenceConfig,
+        ControlReferenceType,
         EditImageConfig,
         GenerateImagesConfig,
         GenerateContentConfig,
@@ -34,7 +37,72 @@ try:
     print(f"[NanoBananaPro] google-genai successfully imported.")
 except ImportError as e:
     GOOGLE_GENAI_AVAILABLE = False
+except ImportError as e:
+    GOOGLE_GENAI_AVAILABLE = False
     print(f"[NanoBananaPro] Failed to import google-genai: {e}")
+
+class LoadScribbleImage:
+    @classmethod
+    def INPUT_TYPES(s):
+        input_dir = folder_paths.get_input_directory()
+        files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
+        return {"required":
+                    {"image": (sorted(files), {"image_upload": True})},
+                "hidden": {"scribble_data": "STRING"},
+                }
+
+    CATEGORY = "3DELAB"
+    COLOR = "#940000"
+
+    RETURN_TYPES = ("IMAGE", "IMAGE")
+    RETURN_NAMES = ("image", "scribble_mask")
+    FUNCTION = "load_image"
+
+    @classmethod
+    def IS_CHANGED(s, image, scribble_data=None):
+        image_path = folder_paths.get_annotated_filepath(image)
+        m = hashlib.sha256()
+        with open(image_path, 'rb') as f:
+            m.update(f.read())
+        # Also include scribble data in the hash if it exists so it updates when scribbling
+        if scribble_data:
+            m.update(scribble_data.encode("utf-8"))
+        return m.digest().hex()
+
+    @classmethod
+    def VALIDATE_INPUTS(s, image, scribble_data=None):
+        if not folder_paths.exists_annotated_filepath(image):
+            return "Invalid image file: {}".format(image)
+        return True
+
+    def load_image(self, image, scribble_data=None):
+        image_path = folder_paths.get_annotated_filepath(image)
+        try:
+            # Load Base Image
+            i = Image.open(image_path)
+            i = ImageOps.exif_transpose(i)
+            image_rgb = i.convert("RGB")
+            image_rgb = np.array(image_rgb).astype(np.float32) / 255.0
+            image_tensor = torch.from_numpy(image_rgb)[None,]
+        except Exception as e:
+            print(f"[NanoBananaPro] Error loading image {image_path}: {e}")
+            image_tensor = torch.zeros((1, 64, 64, 3))
+
+        # Load Scribble Data (Base64 PNG) -> RGBA Tensor
+        if scribble_data and scribble_data.startswith("data:image/png;base64,"):
+            try:
+                b64_str = scribble_data.split(",")[1]
+                img_data = base64.b64decode(b64_str)
+                scribble_pil = Image.open(io.BytesIO(img_data)).convert("RGBA")
+                scribble_np = np.array(scribble_pil).astype(np.float32) / 255.0
+                scribble_tensor = torch.from_numpy(scribble_np)[None,]
+            except Exception as e:
+                print(f"[NanoBananaPro] Error decoding scribble_data: {e}")
+                scribble_tensor = torch.zeros((1, 64, 64, 4)) # RGBA fallback
+        else:
+            scribble_tensor = torch.zeros((1, 64, 64, 4)) # Empty RGBA
+
+        return (image_tensor, scribble_tensor)
 
 class GeminiNanoBananaPro:
     def __init__(self):
@@ -73,6 +141,7 @@ class GeminiNanoBananaPro:
                 }),
                 "images": ("IMAGE", {"tooltip": "Input image for editing, inpainting, or image-to-image generation."}),
                 "mask": ("MASK", {"tooltip": "Mask image for inpainting (white = edit, black = keep)."}),
+                "scribble_mask": ("IMAGE", {"tooltip": "Scribble or sketch image (transparent BG) for controlled editing."}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Seed for random number generation."}),
                 "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"], {
                     "default": "1:1",
@@ -105,7 +174,7 @@ class GeminiNanoBananaPro:
     CATEGORY = "3DELAB"
     COLOR = "#940000"
 
-    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, files=None, system_prompt=""):
+    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, scribble_mask=None, files=None, system_prompt=""):
         # Defaults for hidden inputs
         project_id = ""
         location = "us-central1"
@@ -241,6 +310,30 @@ class GeminiNanoBananaPro:
                 )
 
                 ref_images = [raw_ref]
+
+                # Scribble Logic
+                if scribble_mask is not None:
+                     scribble_pil = tensor_to_pil(scribble_mask[0])
+                     
+                     # Ensure it has solid background if Model requires it. Google Docs say mask should be scribble. 
+                     # Usually scribble models accept black BG with white lines, but Imagen 3 'scribble' control 
+                     # actually says it expects a sketch. For now, since user says red lines on transparent,
+                     # we pass it as a PNG (which supports transparency).
+                     buffered_scribble = io.BytesIO()
+                     scribble_pil.save(buffered_scribble, format="PNG")
+                     scribble_bytes = buffered_scribble.getvalue()
+                     
+                     scribble_ref_image_type = types.Image(image_bytes=scribble_bytes)
+
+                     scribble_ref = ControlReferenceImage(
+                        reference_id=2, # Using ID 2 to not conflict with Mask's ID 1
+                        reference_image=scribble_ref_image_type,
+                        config=ControlReferenceConfig(
+                            control_type=ControlReferenceType.CONTROL_TYPE_SCRIBBLE,
+                            enable_control_image_computation=False # User provided scribble
+                        ),
+                     )
+                     ref_images.append(scribble_ref)
 
                 # Mask Logic
                 if mask is not None:
