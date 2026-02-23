@@ -274,7 +274,27 @@ function openScribbleEditor(node, dataWidget) {
             existingLayer.src = dataWidget.value;
         } else { saveState(); }
     };
-    img.src = api.apiURL(`/view?filename=${encodeURIComponent(imageName)}&type=input&subfolder=&t=${Date.now()}`);
+
+    let src_filename = imageName;
+    let src_type = "input";
+    let src_subfolder = "";
+
+    const typeMatch = src_filename.match(/(.*)\s+\[(.*)\]/);
+    if (typeMatch) {
+        src_filename = typeMatch[1];
+        src_type = typeMatch[2];
+    }
+
+    if (src_filename.includes("/")) {
+        const parts = src_filename.split("/");
+        src_filename = parts.pop();
+        src_subfolder = parts.join("/");
+        if (src_subfolder === "clipspace" && src_type === "input") {
+            src_type = "temp";
+        }
+    }
+
+    img.src = api.apiURL(`/view?filename=${encodeURIComponent(src_filename)}&type=${encodeURIComponent(src_type)}&subfolder=${encodeURIComponent(src_subfolder)}&t=${Date.now()}`);
 
     function renderVectorCanvas() {
         vCtx.clearRect(0, 0, canvasWidth, canvasHeight);

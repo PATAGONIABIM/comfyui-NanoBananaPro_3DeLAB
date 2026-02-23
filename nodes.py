@@ -9,6 +9,7 @@ import json
 import folder_paths
 import random
 import sys
+import hashlib
 
 # DEBUG: Ensure User Site Packages is included (ComfyUI sometimes misses this)
 user_site_packages = r"C:\Users\chris\AppData\Roaming\Python\Python312\site-packages"
@@ -32,7 +33,7 @@ try:
         GenerateContentConfig,
         Modality
     )
-    from google.genai import types
+    from google.genai import types, errors
     GOOGLE_GENAI_AVAILABLE = True
     print(f"[NanoBananaPro] google-genai successfully imported.")
 except ImportError as e:
@@ -55,7 +56,7 @@ class LoadScribbleImage:
     COLOR = "#940000"
 
     RETURN_TYPES = ("IMAGE", "IMAGE")
-    RETURN_NAMES = ("image", "scribble_mask")
+    RETURN_NAMES = ("Image", "scribble_mask")
     FUNCTION = "load_image"
 
     @classmethod
@@ -141,7 +142,7 @@ class GeminiNanoBananaPro:
                 }),
                 "images": ("IMAGE", {"tooltip": "Input image for editing, inpainting, or image-to-image generation."}),
                 "mask": ("MASK", {"tooltip": "Mask image for inpainting (white = edit, black = keep)."}),
-                "scribble_mask": ("IMAGE", {"tooltip": "Scribble or sketch image (transparent BG) for controlled editing."}),
+                "scribble": ("IMAGE", {"tooltip": "Scribble or sketch image (transparent BG) for controlled editing."}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Seed for random number generation."}),
                 "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"], {
                     "default": "1:1",
@@ -174,7 +175,8 @@ class GeminiNanoBananaPro:
     CATEGORY = "3DELAB"
     COLOR = "#940000"
 
-    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, scribble_mask=None, files=None, system_prompt=""):
+    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, scribble=None, files=None, system_prompt=""):
+        scribble_mask = scribble
         # Defaults for hidden inputs
         project_id = ""
         location = "us-central1"
@@ -210,8 +212,30 @@ class GeminiNanoBananaPro:
         using_vertex = False
         final_api_key = api_key # Fallback for Gemini REST path
 
-        # 1. Try Vertex AI (Service Account)
-        if service_account_json:
+        # Read API key if it's a file path
+        if final_api_key and os.path.isfile(final_api_key):
+             try:
+                with open(final_api_key, 'r') as f:
+                    final_api_key = f.read().strip()
+                print("Loaded API Key from file.")
+             except: pass
+
+        # 1. Force Google AI Studio for Gemini 3 Pro payload formatting/endpoints
+        if model == "gemini-3-pro-image-preview":
+             if not final_api_key:
+                  return (torch.zeros((1, 64, 64, 3)), f"Error: '{model}' requires an API Key (Google AI Studio).")
+             
+             print(f"[NanoBananaPro] Using Google AI Studio API Key for {model}")
+             if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
+                 del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
+                 
+             try:
+                 client = genai.Client(api_key=final_api_key)
+             except Exception as e:
+                 return (torch.zeros((1, 64, 64, 3)), f"Error Initializing Gemini Client: {e}")
+
+        # 2. Try Vertex AI (Service Account) for Imagen variants
+        elif service_account_json:
             if not os.path.exists(service_account_json):
                 return (torch.zeros((1, 64, 64, 3)), f"Error: JSON Key file not found at: {service_account_json}")
             
@@ -242,19 +266,9 @@ class GeminiNanoBananaPro:
             except Exception as e:
                  return (torch.zeros((1, 64, 64, 3)), f"Error Initializing Vertex Client: {e}")
         
-        # 2. Try Gemini (API Key) logic is handled in fallback block or check here if strictly required
-        elif api_key:
-             # Legacy API Key Logic (File or String)
-            if os.path.isfile(api_key):
-                 try:
-                    with open(api_key, 'r') as f:
-                        final_api_key = f.read().strip()
-                    print("Loaded API Key from file.")
-                 except: 
-                     pass
         else:
              return (torch.zeros((1, 64, 64, 3)), "Error: No Authentication provided. Please enter 'api_key' (Gemini) or 'service_account_json' (Vertex).")
-
+             
         # Check for Vertex Requirement
         is_editing = operation != "GENERATE"
         is_json_key_path = using_vertex
@@ -266,19 +280,28 @@ class GeminiNanoBananaPro:
             return img
 
         # Helper to convert Tensor to B64
-        # Helper to convert Tensor to B64
         def tensor_to_b64(tensor): # [H, W, C]
             img = tensor_to_pil(tensor)
             buffered = io.BytesIO()
-            img.save(buffered, format="PNG")
-            return base64.b64encode(buffered.getvalue()).decode("utf-8")
+            if img.mode == "RGBA":
+                img.save(buffered, format="PNG")
+                mime_type = "image/png"
+            else:
+                img.save(buffered, format="JPEG", quality=85)
+                mime_type = "image/jpeg"
+            return base64.b64encode(buffered.getvalue()).decode("utf-8"), mime_type
         
         # Helper to convert Tensor to Bytes
         def tensor_to_bytes(tensor): # [H, W, C]
             img = tensor_to_pil(tensor)
             buffered = io.BytesIO()
-            img.save(buffered, format="PNG")
-            return buffered.getvalue()
+            if img.mode == "RGBA":
+                img.save(buffered, format="PNG")
+                mime_type = "image/png"
+            else:
+                img.save(buffered, format="JPEG", quality=85)
+                mime_type = "image/jpeg"
+            return buffered.getvalue(), mime_type
 
         # --- VERTEX AI CLIENT INIT (Already done above) ---
 
@@ -437,33 +460,104 @@ class GeminiNanoBananaPro:
                 if model == "gemini-3-pro-image-preview":
                     print(f"[NanoBananaPro] using generate_content for {model}")
                     try:
-                         # 1. Prepare Content Parts
+                         # 1. Prepare Content list
                          message_parts = [types.Part.from_text(text=prompt)]
                          
-                         # 2. Add Images if present
+                         # 2. Add Images and Scribbles
+                         added_count = 0
                          if images is not None:
                              for i in range(images.shape[0]):
-                                 img_bytes = tensor_to_bytes(images[i])
-                                 start_len = len(img_bytes)
-                                 # Create Part from Bytes
-                                 # Using types.Part(inline_data=...) pattern for safety
+                                 # If scribble_mask is provided, composite it over the base image
+                                 if scribble_mask is not None:
+                                     base_pil = tensor_to_pil(images[i]).convert("RGBA")
+                                     s_idx = min(i, scribble_mask.shape[0] - 1)
+                                     scribble_pil = tensor_to_pil(scribble_mask[s_idx]).convert("RGBA")
+                                     composite = Image.alpha_composite(base_pil, scribble_pil).convert("RGB")
+                                     
+                                     print(f"[NanoBananaPro] Compositing base image and scribble mask.")
+                                     # --- DEBUG SAVE ---
+                                     debug_path = os.path.join(folder_paths.get_temp_directory(), f"nanobanana_debug_composite_sdk_{i}.jpg")
+                                     composite.save(debug_path, quality=85)
+                                     print(f"[NanoBananaPro] Saved debug preview to: {debug_path}")
+                                     # ------------------
+                                     
+                                     buffered = io.BytesIO()
+                                     composite.save(buffered, format="JPEG", quality=85)
+                                     img_bytes = buffered.getvalue()
+                                     mime_type = "image/jpeg"
+                                 else:
+                                     img_bytes, mime_type = tensor_to_bytes(images[i])
+                                 
                                  part = types.Part(
                                      inline_data=types.Blob(
-                                         mime_type="image/png",
+                                         mime_type=mime_type,
                                          data=img_bytes
                                      )
                                  )
                                  message_parts.append(part)
-                             print(f"[NanoBananaPro] Added {images.shape[0]} images to request.")
+                                 added_count += 1
+                         elif scribble_mask is not None: # Just scribble
+                             for i in range(scribble_mask.shape[0]):
+                                 img_bytes, mime_type = tensor_to_bytes(scribble_mask[i])
+                                 part = types.Part(
+                                     inline_data=types.Blob(
+                                         mime_type=mime_type,
+                                         data=img_bytes
+                                     )
+                                 )
+                                 message_parts.append(part)
+                                 added_count += 1
 
-                         response = client.models.generate_content(
-                            model=model,
-                            contents=message_parts,
-                            config=GenerateContentConfig(
-                                response_modalities=[Modality.IMAGE, Modality.TEXT] if response_modalities == "IMAGE+TEXT" else [Modality.IMAGE],
-                                safety_settings=[],
-                            ),
-                        )
+                         print(f"[NanoBananaPro] Added {added_count} composite image(s) to request.")
+
+                         
+                         try:
+                             response = client.models.generate_content(
+                                 model=model,
+                                 contents=message_parts,
+                                 config=types.GenerateContentConfig(
+                                     response_modalities=["IMAGE", "TEXT"] if response_modalities == "IMAGE+TEXT" else ["IMAGE"],
+                                     image_config=types.ImageConfig(
+                                         aspect_ratio=aspect_ratio,
+                                         image_size=resolution
+                                     )
+                                 ),
+                             )
+                         except errors.APIError as api_err:
+                             if api_err.code == 503 and final_api_key:
+                                 print(f"[NanoBananaPro] Vertex AI returned 503 Service Unavailable for Gemini 3 Pro {aspect_ratio}. Falling back to public Google AI Studio endpoint...")
+                                 try:
+                                     # Temporarily disable vertex AI override for this client instance
+                                     if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
+                                         del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
+                                         
+                                     fallback_client = genai.Client(api_key=final_api_key)
+                                     response = fallback_client.models.generate_content(
+                                         model=model,
+                                         contents=message_parts,
+                                         config=types.GenerateContentConfig(
+                                             response_modalities=["IMAGE", "TEXT"] if response_modalities == "IMAGE+TEXT" else ["IMAGE"],
+                                             image_config=types.ImageConfig(
+                                                 aspect_ratio=aspect_ratio,
+                                                 image_size=resolution
+                                             )
+                                         ),
+                                     )
+                                     # Restore Vertex AI env for future runs if we were using it
+                                     if using_vertex:
+                                         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+                                         
+                                 except Exception as fallback_e:
+                                     # Restore Vertex AI env
+                                     if using_vertex:
+                                            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+                                     print(f"[NanoBananaPro] AI Studio Fallback Exception: {fallback_e}")
+                                     import traceback
+                                     traceback.print_exc()
+                                     return (torch.zeros((1, 64, 64, 3)), f"Gemini 3 Pro Fallback Error: {fallback_e}")
+                             else:
+                                 # Re-raise if it's not a 503 or we have no fallback key
+                                 raise api_err
                          
                          out_tensors = []
                          out_text = ""
@@ -483,6 +577,9 @@ class GeminiNanoBananaPro:
                              return (torch.zeros((1, 64, 64, 3)), f"No images generated. Text: {out_text}")
 
                     except Exception as e:
+                        print(f"[NanoBananaPro] Gemini 3 Pro SDK Exception: {e}")
+                        import traceback
+                        traceback.print_exc()
                         return (torch.zeros((1, 64, 64, 3)), f"Gemini 3 Pro Generation Error: {e}")
 
 
@@ -493,7 +590,7 @@ class GeminiNanoBananaPro:
                     response = client.models.generate_images(
                         model=model,
                         prompt=prompt,
-                        config=GenerateImagesConfig(
+                        config=types.GenerateImagesConfig(
                             number_of_images=1,
                             aspect_ratio=aspect_ratio if aspect_ratio else "1:1"
                         )
@@ -520,13 +617,40 @@ class GeminiNanoBananaPro:
             
             parts = [{"text": prompt}]
             
-            # Images (for Image-to-Image generation, not editing)
+            # Images and Scribbles (for Image-to-Image generation, not editing)
             if images is not None:
                 for i in range(images.shape[0]):
+                    if scribble_mask is not None:
+                        base_pil = tensor_to_pil(images[i]).convert("RGBA")
+                        s_idx = min(i, scribble_mask.shape[0] - 1)
+                        scribble_pil = tensor_to_pil(scribble_mask[s_idx]).convert("RGBA")
+                        composite = Image.alpha_composite(base_pil, scribble_pil).convert("RGB")
+                        buffered = io.BytesIO()
+                        composite.save(buffered, format="JPEG", quality=85)
+                        img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                        mime_type = "image/jpeg"
+                        print(f"[NanoBananaPro] Compositing base image and scribble mask.")
+                        # --- DEBUG SAVE ---
+                        debug_path = os.path.join(folder_paths.get_temp_directory(), f"nanobanana_debug_composite_rest_{i}.jpg")
+                        composite.save(debug_path)
+                        print(f"[NanoBananaPro] Saved debug preview to: {debug_path}")
+                        # ------------------
+                    else:
+                        img_b64, mime_type = tensor_to_b64(images[i])
+                        
                     parts.append({
                         "inlineData": {
-                            "mimeType": "image/png",
-                            "data": tensor_to_b64(images[i])
+                            "mimeType": mime_type,
+                            "data": img_b64
+                        }
+                    })
+            elif scribble_mask is not None:
+                for i in range(scribble_mask.shape[0]):
+                    img_b64, mime_type = tensor_to_b64(scribble_mask[i])
+                    parts.append({
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": img_b64
                         }
                     })
              
