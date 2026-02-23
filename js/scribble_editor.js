@@ -5,20 +5,67 @@ app.registerExtension({
     name: "NanoBananaPro.ScribbleEditor",
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (nodeData.name === "LoadScribbleImage") {
-            const onSetup = nodeType.prototype.onNodeCreated;
+            const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                const r = onSetup ? onSetup.apply(this, arguments) : undefined;
-
-                let scribbleDataWidget = this.widgets.find(w => w.name === "scribble_data");
-                if (!scribbleDataWidget) {
-                    scribbleDataWidget = this.addWidget("string", "scribble_data", "", () => { }, { hidden: true });
+                let r;
+                try {
+                    r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
+                } catch (e) {
+                    console.error("[ScribbleEditor] Error in original onNodeCreated:", e);
                 }
 
-                this.addWidget("button", "✏️ Abrir Scribble Editor", "edit", () => {
-                    openScribbleEditor(this, scribbleDataWidget);
-                });
+                try {
+                    this.bgcolor = "#2d0000ff";
+                    this.color = "#000000";
+
+                    let scribbleDataWidget = this.widgets ? this.widgets.find(w => w.name === "scribble_data") : null;
+                    if (!scribbleDataWidget) {
+                        scribbleDataWidget = this.addWidget("string", "scribble_data", "", () => { }, { hidden: true });
+                    }
+
+                    const existingBtn = this.widgets ? this.widgets.find(w => w.name === "✏️ Abrir Scribble Editor") : null;
+                    if (!existingBtn) {
+                        this.addWidget("button", "✏️ Abrir Scribble Editor", "edit", () => {
+                            openScribbleEditor(this, scribbleDataWidget);
+                        });
+                    }
+                } catch (e) {
+                    console.error("[ScribbleEditor] Error adding UI elements:", e);
+                }
 
                 return r;
+            };
+
+            const onDrawBackground = nodeType.prototype.onDrawBackground;
+            nodeType.prototype.onDrawBackground = function (ctx) {
+                try {
+                    if (onDrawBackground) {
+                        onDrawBackground.apply(this, arguments);
+                    }
+
+                    let scribbleDataWidget = this.widgets ? this.widgets.find(w => w.name === "scribble_data") : null;
+                    if (scribbleDataWidget && scribbleDataWidget.value && scribbleDataWidget.value.startsWith("data:image")) {
+                        if (this.imageRects && this.imageRects.length > 0) {
+                            const rect = this.imageRects[0];
+
+                            // Cache the image to avoid reloading it every frame
+                            if (!this._cachedScribbleStr || this._cachedScribbleStr !== scribbleDataWidget.value) {
+                                this._cachedScribbleImg = new Image();
+                                this._cachedScribbleImg.onload = () => {
+                                    this.setDirtyCanvas(true, false);
+                                };
+                                this._cachedScribbleImg.src = scribbleDataWidget.value;
+                                this._cachedScribbleStr = scribbleDataWidget.value;
+                            }
+
+                            if (this._cachedScribbleImg && this._cachedScribbleImg.complete && this._cachedScribbleImg.naturalWidth > 0) {
+                                ctx.drawImage(this._cachedScribbleImg, ...rect);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("[ScribbleEditor] Error in onDrawBackground:", e);
+                }
             };
         }
     }
@@ -105,7 +152,7 @@ function openScribbleEditor(node, dataWidget) {
     // Setting Controls
     const labelSize = document.createElement("span"); labelSize.innerText = "Tamaño:"; labelSize.style.fontSize = "14px";
     const inputSize = document.createElement("input");
-    inputSize.type = "range"; inputSize.min = "1"; inputSize.max = "100"; inputSize.value = brushSize;
+    inputSize.type = "range"; inputSize.min = "1"; inputSize.max = "300"; inputSize.value = brushSize;
     inputSize.style.width = "100px";
     inputSize.title = "Grosor y tamaño";
 
@@ -118,7 +165,22 @@ function openScribbleEditor(node, dataWidget) {
     // Actions
     const btnUndo = document.createElement("button"); btnUndo.innerHTML = `<img src="${getIconUrl('volver.png')}" style="width:20px;height:20px;filter:invert(1);">`; btnUndo.title = "Deshacer";
     const btnRedo = document.createElement("button"); btnRedo.innerHTML = `<img src="${getIconUrl('volver.png')}" style="width:20px;height:20px;transform:scaleX(-1);filter:invert(1);">`; btnRedo.title = "Rehacer";
-    [btnUndo, btnRedo].forEach(b => Object.assign(b.style, { width: "36px", height: "36px", background: "transparent", border: "1px solid #444", borderRadius: "4px", cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center" }));
+    const btnDelete = document.createElement("button"); btnDelete.innerHTML = `<img src="${getIconUrl('eliminar.png')}" style="width:20px;height:20px;filter:invert(1);">`; btnDelete.title = "Eliminar Elemento Seleccionado (Del)";
+
+    [btnUndo, btnRedo, btnDelete].forEach(b => Object.assign(b.style, { width: "36px", height: "36px", background: "transparent", border: "1px solid #444", borderRadius: "4px", cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center" }));
+
+    function deleteActiveObject() {
+        if (activeObject) {
+            const index = objects.indexOf(activeObject);
+            if (index > -1) {
+                objects.splice(index, 1);
+                activeObject = null;
+                renderVectorCanvas();
+                saveState();
+            }
+        }
+    }
+    btnDelete.onclick = deleteActiveObject;
 
     // Save/Cancel
     const btnSave = document.createElement("button");
@@ -131,7 +193,7 @@ function openScribbleEditor(node, dataWidget) {
 
     toolbar.append(btnMove, btnPencil, btnEraser, btnText, btnArrow);
     toolbar.append(document.createElement("div"), labelSize, inputSize, selectShape, document.createElement("div"));
-    toolbar.append(btnUndo, btnRedo);
+    toolbar.append(btnUndo, btnRedo, btnDelete);
 
     const rightControls = document.createElement("div");
     rightControls.style.marginLeft = "auto";
@@ -259,11 +321,16 @@ function openScribbleEditor(node, dataWidget) {
     img.onload = () => {
         const maxWidth = window.innerWidth * 0.8; const maxHeight = window.innerHeight * 0.8;
         let w = img.width; let h = img.height;
+        let displayW = w; let displayH = h;
         const ratio = Math.min(maxWidth / w, maxHeight / h);
-        if (ratio < 1) { w *= ratio; h *= ratio; }
+        if (ratio < 1) { displayW *= ratio; displayH *= ratio; }
 
         canvasWidth = w; canvasHeight = h;
-        [bgCanvas, rasterCanvas, vectorCanvas, overlayCanvas].forEach(c => { c.width = w; c.height = h; });
+        [bgCanvas, rasterCanvas, vectorCanvas, overlayCanvas].forEach(c => {
+            c.width = w; c.height = h;
+            c.style.width = `${displayW}px`;
+            c.style.height = `${displayH}px`;
+        });
 
         const bgCtx = bgCanvas.getContext("2d");
         bgCtx.drawImage(img, 0, 0, w, h);
@@ -498,14 +565,35 @@ function openScribbleEditor(node, dataWidget) {
         }
     }
 
+    // Keyboard support for deleting selected element
+    const handleKeyDown = (e) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            // Prevent deleting if the user is typing in a text prompt/input (if any active element is an input)
+            if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                deleteActiveObject();
+            }
+        }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    function closeEditor() {
+        window.removeEventListener("keydown", handleKeyDown);
+        document.body.removeChild(overlay);
+    }
+
     btnSave.onclick = () => {
+        // Deselect object so selection bounding box isn't rendered into the saved scribble image
+        activeObject = null;
+        renderVectorCanvas();
+
         const finalCanvas = document.createElement("canvas");
         finalCanvas.width = canvasWidth; finalCanvas.height = canvasHeight;
         const ctx = finalCanvas.getContext("2d");
         ctx.drawImage(rasterCanvas, 0, 0); ctx.drawImage(vectorCanvas, 0, 0);
         dataWidget.value = finalCanvas.toDataURL("image/png");
-        document.body.removeChild(overlay); app.graph.setDirtyCanvas(true);
+        closeEditor();
+        app.graph.setDirtyCanvas(true);
     };
 
-    btnCancel.onclick = () => { document.body.removeChild(overlay); };
+    btnCancel.onclick = () => { closeEditor(); };
 }

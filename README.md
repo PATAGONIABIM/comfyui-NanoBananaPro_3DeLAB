@@ -6,7 +6,7 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 
 ---
 
-## 🇺🇸 English (v1.1.0)
+## 🇺🇸 English (v1.1.1)
 
 ### Features
 - **Unlocks Gemini 3 Pro** via `google-genai` library (replacing standard REST API).
@@ -15,6 +15,7 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
   - **API Key (Google AI Studio)**: Required for standard Image Generation.
   - **Service Account JSON (Vertex AI)**: Required for Image Editing and Inpainting operations.
 - **NEW: Load Image & Scribble Editor Node**: A custom node featuring an integrated HTML5 canvas to draw vector arrows, text, and raster scribbles directly over your images to generate precise `scribble_mask` inputs.
+  - *v1.1.1 Update*: The canvas now retains 1:1 native resolution scaling of the base image regardless of screen size, and securely transmits scribbles as detached layers to Gemini 3 Pro for higher fidelity control.
 
 ### Installation
 1. Navigate to your ComfyUI custom nodes directory:
@@ -61,7 +62,7 @@ To use the node, you need to provide authentication credentials in the node inpu
 
 ---
 
-## 🇪🇸 Español (v1.1.0)
+## 🇪🇸 Español (v1.1.1)
 
 ### Características
 - **Desbloquea Gemini 3 Pro** a través de la librería `google-genai` (reemplazo de API REST estándar).
@@ -70,6 +71,7 @@ To use the node, you need to provide authentication credentials in the node inpu
   - **API Key (Google AI Studio)**: Necesaria para la Generación de Imágenes estándar.
   - **Service Account JSON (Vertex AI)**: Necesaria para operaciones de Edición de Imágenes e Inpainting.
 - **NUEVO: Nodo Load Image & Scribble Editor**: Un nodo personalizado que integra un Canvas HTML5 para dibujar flechas vectoriales, texto y trazos libres directamente sobre tus imágenes para generar entradas `scribble_mask` precisas.
+  - *Actualización v1.1.1*: El lienzo retiene ahora el escalado de resolución nativa 1:1 de la imagen base independientemente del tamaño de la pantalla, y transmite los trazados como capas separadas e independientes hacia Gemini 3 Pro para mayor fidelidad de control.
 
 ### Instalación
 1. Navega a tu directorio de nodos personalizados de ComfyUI:

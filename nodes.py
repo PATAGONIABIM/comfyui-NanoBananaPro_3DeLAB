@@ -467,35 +467,32 @@ class GeminiNanoBananaPro:
                          added_count = 0
                          if images is not None:
                              for i in range(images.shape[0]):
-                                 # If scribble_mask is provided, composite it over the base image
+                                 # If scribble_mask is provided, send as separate layers
                                  if scribble_mask is not None:
-                                     base_pil = tensor_to_pil(images[i]).convert("RGBA")
+                                     print(f"[NanoBananaPro] Sending base image and scribble mask as separate layers (SDK).")
+                                     # 1. Base Image
+                                     base_bytes, base_mime = tensor_to_bytes(images[i])
+                                     part_base = types.Part(inline_data=types.Blob(mime_type=base_mime, data=base_bytes))
+                                     message_parts.append(part_base)
+                                     
+                                     # 2. Scribble Layer
                                      s_idx = min(i, scribble_mask.shape[0] - 1)
-                                     scribble_pil = tensor_to_pil(scribble_mask[s_idx]).convert("RGBA")
-                                     composite = Image.alpha_composite(base_pil, scribble_pil).convert("RGB")
+                                     s_bytes, s_mime = tensor_to_bytes(scribble_mask[s_idx])
+                                     part_scribble = types.Part(inline_data=types.Blob(mime_type=s_mime, data=s_bytes))
+                                     message_parts.append(part_scribble)
                                      
-                                     print(f"[NanoBananaPro] Compositing base image and scribble mask.")
-                                     # --- DEBUG SAVE ---
-                                     debug_path = os.path.join(folder_paths.get_temp_directory(), f"nanobanana_debug_composite_sdk_{i}.jpg")
-                                     composite.save(debug_path, quality=85)
-                                     print(f"[NanoBananaPro] Saved debug preview to: {debug_path}")
-                                     # ------------------
-                                     
-                                     buffered = io.BytesIO()
-                                     composite.save(buffered, format="JPEG", quality=85)
-                                     img_bytes = buffered.getvalue()
-                                     mime_type = "image/jpeg"
+                                     added_count += 2
                                  else:
                                      img_bytes, mime_type = tensor_to_bytes(images[i])
                                  
-                                 part = types.Part(
-                                     inline_data=types.Blob(
-                                         mime_type=mime_type,
-                                         data=img_bytes
+                                     part = types.Part(
+                                         inline_data=types.Blob(
+                                             mime_type=mime_type,
+                                             data=img_bytes
+                                         )
                                      )
-                                 )
-                                 message_parts.append(part)
-                                 added_count += 1
+                                     message_parts.append(part)
+                                     added_count += 1
                          elif scribble_mask is not None: # Just scribble
                              for i in range(scribble_mask.shape[0]):
                                  img_bytes, mime_type = tensor_to_bytes(scribble_mask[i])
@@ -621,29 +618,23 @@ class GeminiNanoBananaPro:
             if images is not None:
                 for i in range(images.shape[0]):
                     if scribble_mask is not None:
-                        base_pil = tensor_to_pil(images[i]).convert("RGBA")
+                        print(f"[NanoBananaPro] Sending base image and scribble mask as separate layers (REST).")
+                        # 1. Base Image
+                        base_b64, base_mime = tensor_to_b64(images[i])
+                        parts.append({"inlineData": {"mimeType": base_mime, "data": base_b64}})
+                        
+                        # 2. Scribble Layer
                         s_idx = min(i, scribble_mask.shape[0] - 1)
-                        scribble_pil = tensor_to_pil(scribble_mask[s_idx]).convert("RGBA")
-                        composite = Image.alpha_composite(base_pil, scribble_pil).convert("RGB")
-                        buffered = io.BytesIO()
-                        composite.save(buffered, format="JPEG", quality=85)
-                        img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                        mime_type = "image/jpeg"
-                        print(f"[NanoBananaPro] Compositing base image and scribble mask.")
-                        # --- DEBUG SAVE ---
-                        debug_path = os.path.join(folder_paths.get_temp_directory(), f"nanobanana_debug_composite_rest_{i}.jpg")
-                        composite.save(debug_path)
-                        print(f"[NanoBananaPro] Saved debug preview to: {debug_path}")
-                        # ------------------
+                        s_b64, s_mime = tensor_to_b64(scribble_mask[s_idx])
+                        parts.append({"inlineData": {"mimeType": s_mime, "data": s_b64}})
                     else:
                         img_b64, mime_type = tensor_to_b64(images[i])
-                        
-                    parts.append({
-                        "inlineData": {
-                            "mimeType": mime_type,
-                            "data": img_b64
-                        }
-                    })
+                        parts.append({
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": img_b64
+                            }
+                        })
             elif scribble_mask is not None:
                 for i in range(scribble_mask.shape[0]):
                     img_b64, mime_type = tensor_to_b64(scribble_mask[i])
