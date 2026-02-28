@@ -6,7 +6,7 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 
 ---
 
-## 🇺🇸 English (v1.2.0)
+## 🇺🇸 English (v1.2.1)
 
 ### Features
 - **Unlocks Gemini 3.1 Flash Image Preview (Nano Banana 2)** for high-speed, high-volume image generation via `google-genai`.
@@ -63,7 +63,7 @@ To use the node, you need to provide authentication credentials in the node inpu
 
 ---
 
-## 🇪🇸 Español (v1.2.0)
+## 🇪🇸 Español (v1.2.1)
 
 ### Características
 - **Desbloquea Gemini 3.1 Flash Image Preview (Nano Banana 2)** para generación de alta velocidad y volumen mediante `google-genai`.
