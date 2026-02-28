@@ -1,7 +1,7 @@
 [project]
-name = "NanoBananaPro3_Direct"
+name = "NanoBanana&Veo_Suite_3DeLAB"
 description = "Gemini 3.1 Flash, Gemini 3 Pro and Vertex AI Imagen 3 Models Node for ComfyUI. image generation | inpaint | outpaint | background swap"
-version = "1.2.1"
+version = "1.3.0"
 license = {file = "LICENSE"} 
 requires-python = ">=3.10"
 dependencies = [

@@ -10,6 +10,7 @@ import folder_paths
 import random
 import sys
 import hashlib
+import time
 
 # DEBUG: Ensure User Site Packages is included (ComfyUI sometimes misses this)
 user_site_packages = r"C:\Users\chris\AppData\Roaming\Python\Python312\site-packages"
@@ -730,3 +731,310 @@ class GeminiNanoBananaPro:
             except Exception as e:
                 print(f"Exception during request/parsing: {e}")
                 return (torch.zeros((1, 64, 64, 3)), f"Exception: {e}")
+
+class GeminiVeo31VideoGenerator:
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "A cinematic shot of...",
+                    "tooltip": "The text description of the video you want to generate."
+                }),
+                "model": (["veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"], {
+                    "default": "veo-3.1-generate-preview",
+                    "tooltip": "Select the Veo 3.1 model."
+                }),
+                "mode": (["text_to_video", "image_to_video", "first_last_frame", "extend_video"], {
+                    "default": "text_to_video",
+                    "tooltip": "Select the generation mode."
+                }),
+            },
+            "optional": {
+                "negative_prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Text describing what not to include."
+                }),
+                "api_key": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "placeholder": "Gemini API Key",
+                    "tooltip": "Your Google AI Studio API Key. Required."
+                }),
+                "image": ("IMAGE", {"tooltip": "Input image (for image_to_video, first frame of FF2LF, or reference images for txt2v)."}),
+                "last_frame": ("IMAGE", {"tooltip": "Ending frame. Used only in first_last_frame mode."}),
+                "video": ("STRING", {
+                    "forceInput": True,
+                    "default": "",
+                    "tooltip": "Connect the output_video from a previous Veo 3.1 node to extend it. Required for extend_video."
+                }),
+                "aspect_ratio": (["16:9", "9:16"], {
+                    "default": "16:9",
+                    "tooltip": "The aspect ratio of the generated video."
+                }),
+                "resolution": (["720p", "1080p", "4k"], {
+                    "default": "720p",
+                    "tooltip": "Resolution. Note: 1080p and 4k forced to 8s duration. Extension is 720p only."
+                }),
+                "duration": (["4", "6", "8"], {
+                    "default": "4",
+                    "tooltip": "Duration in seconds. Forced to 8s if 1080p/4k, or if using reference images."
+                }),
+                "person_generation": (["allow_all", "allow_adult", "dont_allow"], {
+                    "default": "allow_all",
+                    "tooltip": "Control person generation."
+                }),
+                "seed": ("INT", {"default": 42, "min": 0, "max": 0xffffffffffffffff, "tooltip": "Seed (improves determinism but not guaranteed)."}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("output_video", "video_extend")
+    FUNCTION = "generate"
+    CATEGORY = "3DELAB"
+    COLOR = "#940000"
+
+    def generate(self, prompt, model, mode, negative_prompt="", api_key="", image=None, last_frame=None, video="", aspect_ratio="16:9", resolution="720p", duration="4", person_generation="allow_all", seed=42):
+        print(f"--- [NanoBananaPro] Starting Veo 3.1: {mode} ---")
+        api_key = api_key.strip()
+        
+        # Read API key from file if it's a path
+        if api_key and os.path.isfile(api_key):
+             try:
+                with open(api_key, 'r') as f:
+                    api_key = f.read().strip()
+                print("Loaded API Key from file.")
+             except Exception as e:
+                 print(f"Error reading API key file: {e}")
+
+        if not api_key:
+            return ("Error: API Key is required.",)
+
+        # Helper to convert Tensor [B, H, W, C] to Base64
+        def tensor_to_b64(tensor):
+            i_np = (tensor.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+            img = Image.fromarray(i_np)
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        base_url = "https://generativelanguage.googleapis.com/v1beta"
+        url = f"{base_url}/models/{model}:predictLongRunning"
+        headers = {
+            "Content-Type": "application/json", 
+            "x-goog-api-key": api_key
+        }
+
+        # Build constraints
+        # durationSeconds must be forced to "8" for 1080p or 4k (per documentation)
+        if resolution in ["1080p", "4k"] or mode == "extend_video":
+            duration_val = 8
+        else:
+            duration_val = int(duration)
+
+        parameters = {
+            "aspectRatio": aspect_ratio,
+            "resolution": resolution,
+            "durationSeconds": duration_val,
+            "personGeneration": person_generation,
+            "seed": seed % 4294967296
+        }
+            
+        if negative_prompt.strip():
+            parameters["negativePrompt"] = negative_prompt.strip()
+
+        instance = {"prompt": prompt}
+
+        # Handle Modes & Overrides
+        if mode == "text_to_video":
+            # If image is provided in txt2v, treat as reference images
+            if image is not None:
+                duration_val = 8
+                parameters["durationSeconds"] = duration_val
+                if person_generation == "allow_all":
+                    parameters["personGeneration"] = "allow_adult"
+                parameters["referenceImages"] = []
+                for i in range(min(3, image.shape[0])):
+                    img_b64 = tensor_to_b64(image[i])
+                    parameters["referenceImages"].append({
+                        "image": {
+                            "bytesBase64Encoded": img_b64,
+                            "mimeType": "image/png"
+                        },
+                        "referenceType": "ASSET"
+                    })
+                print(f"[NanoBananaPro] Added {len(parameters['referenceImages'])} reference images.")
+
+        elif mode == "image_to_video":
+            if image is None:
+                return ("Error: 'image' input is required for image_to_video mode.",)
+            img_b64 = tensor_to_b64(image[0])
+            instance["image"] = {
+                "bytesBase64Encoded": img_b64,
+                "mimeType": "image/png"
+            }
+            if person_generation == "allow_all":
+                parameters["personGeneration"] = "allow_adult"
+
+        elif mode == "first_last_frame":
+            if image is None or last_frame is None:
+               return ("Error: Both 'image' and 'last_frame' are required for first_last_frame mode.",)
+            img_b64 = tensor_to_b64(image[0])
+            last_img_b64 = tensor_to_b64(last_frame[0])
+            
+            instance["image"] = {
+                "bytesBase64Encoded": img_b64,
+                "mimeType": "image/png"
+            }
+            # Put lastFrame in instance, SDK puts it there surprisingly
+            instance["lastFrame"] = {
+                "bytesBase64Encoded": last_img_b64,
+                "mimeType": "image/png"
+            }
+            
+            if person_generation == "allow_all":
+                parameters["personGeneration"] = "allow_adult"
+
+        elif mode == "extend_video":
+            if not video:
+                return ("Error: 'video' input is required for extend_video mode.", "")
+            if not video.startswith("https://"):
+                return ("Error: For extend_video, you MUST connect the 'video_uri' output from a previous Veo 3.1 node into this 'video' input. Do not connect the 'output_video' local path.", "")
+            
+            instance["video"] = {"uri": video}
+            
+            # Remove parameters that aren't allowed or override them correctly
+            parameters["sampleCount"] = 1
+            parameters["resolution"] = "720p" # force 720p
+            # Usually extended video duration doesn't matter, but SDK keeps resolution and sampleCount.
+            # Number of videos parameter is mapped to sampleCount internally in some backend SDKs
+
+        payload = {
+            "instances": [instance],
+            "parameters": parameters
+        }
+
+        print(f"Sending generation request to Veo 3.1 ({model})...")
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(payload))
+            if response.status_code != 200:
+                print(f"API Error {response.status_code}: {response.text}")
+                return (f"API Error {response.status_code}: {response.text}", "")
+            
+            resp_json = response.json()
+            operation_name = resp_json.get("name")
+            if not operation_name:
+                return (f"Error: No operation name returned. {response.text}", "")
+            
+            print(f"Operation started: {operation_name}")
+            
+            # Polling
+            poll_url = f"{base_url}/{operation_name}"
+            is_done = False
+            video_uri = None
+            
+            while not is_done:
+                print("Waiting for video generation to complete (10s)...")
+                time.sleep(10)
+                poll_resp = requests.get(poll_url, headers=headers)
+                
+                if poll_resp.status_code != 200:
+                    print(f"Polling Error {poll_resp.status_code}: {poll_resp.text}")
+                    return (f"Polling Error: {poll_resp.text}", "")
+                
+                poll_data = poll_resp.json()
+                is_done = poll_data.get("done", False)
+                
+                if is_done:
+                    if "error" in poll_data:
+                        print(f"Generation Error: {poll_data['error']}")
+                        return (f"Generation Error: {poll_data['error']}", "")
+                    
+                    try:
+                        raw_video_uri = poll_data["response"]["generateVideoResponse"]["generatedSamples"][0]["video"]["uri"]
+                        download_uri = raw_video_uri
+                        video_uri = raw_video_uri
+                        # Strip download suffix for extend_video compatibility
+                        if ":download" in video_uri:
+                            video_uri = video_uri.split(":download")[0]
+                    except KeyError as e:
+                        return (f"Error parsing successful response: {poll_data}", "")
+
+            if video_uri:
+                print(f"Video ready at URI: {video_uri}")
+                # Generate unique filename
+                h = hashlib.sha256(f"{prompt}_{time.time()}".encode()).hexdigest()[:8]
+                out_filename = f"veo31_{mode}_{h}.mp4"
+                out_path = os.path.join(self.output_dir, out_filename)
+                
+                print(f"Downloading video to {out_path}...")
+                try:
+                    # Append alt=media to actually request binary bytes instead of JSON metadata
+                    dl_url = f"{download_uri}?alt=media" if "?" not in download_uri else f"{download_uri}&alt=media"
+                    dl_resp = requests.get(dl_url, headers=headers)
+                    
+                    if dl_resp.status_code == 200:
+                        with open(out_path, "wb") as f:
+                            f.write(dl_resp.content)
+                        print(f"Successfully saved to {out_path}")
+                        return (out_path, video_uri)
+                    else:
+                        print(f"Download Error {dl_resp.status_code}: {dl_resp.text}")
+                        return (f"Download Error {dl_resp.status_code}: {dl_resp.text}", video_uri)
+                except Exception as e:
+                    print(f"Failed to download video: {e}")
+                    return (f"Failed to download video: {e}", video_uri)
+                
+            return ("Error: Polling finished but no video URI found.", "")
+
+        except Exception as e:
+            print(f"Exception during Veo 3.1 generation: {e}")
+            import traceback
+            traceback.print_exc()
+            return (f"Exception: {e}", "")
+
+class NanoBananaPreviewVideo:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "video_path": ("STRING", {"forceInput": True}),
+            }
+        }
+
+    RETURN_TYPES = ()
+    OUTPUT_NODE = True
+    FUNCTION = "preview"
+    CATEGORY = "3DELAB"
+    COLOR = "#940000"
+
+    def preview(self, video_path):
+        import os
+        import folder_paths
+        
+        if not video_path or not os.path.exists(video_path):
+            return {"ui": {"video": []}}
+            
+        filename = os.path.basename(video_path)
+        output_dir = folder_paths.get_output_directory()
+        
+        # Calculate subfolder if any
+        subfolder = os.path.dirname(video_path).replace(output_dir, "").strip("\\/")
+        
+        return {
+            "ui": {
+                "video": [
+                    {
+                        "filename": filename,
+                        "subfolder": subfolder,
+                        "type": "output"
+                    }
+                ]
+            }
+        }
