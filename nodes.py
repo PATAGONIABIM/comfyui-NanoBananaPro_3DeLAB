@@ -118,9 +118,9 @@ class GeminiNanoBananaPro:
                     "default": "Describe the image you want to generate...",
                     "tooltip": "The text description of the image you want to generate."
                 }),
-                "model": (["gemini-3-pro-image-preview", "imagen-3.0-capability-001", "imagen-3.0-generate-001", "imagen-4.0-generate-001"], {
+                "model": (["gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview", "imagen-3.0-capability-001", "imagen-3.0-generate-001", "imagen-4.0-generate-001"], {
                     "default": "gemini-3-pro-image-preview",
-                    "tooltip": "Select the AI model to use (API Key for Gemini 3 Pro to generate | JSON Key for Imagen variants for Inpaint, Outpaint, Background Swap)."
+                    "tooltip": "Select the AI model to use (API Key for Gemini models to generate | JSON Key for Imagen variants for Inpaint, Outpaint, Background Swap)."
                 }),
                 "operation": (["GENERATE", "INPAINT_INSERTION", "INPAINT_REMOVAL", "OUTPAINT", "BACKGROUND_SWAP"], {
                     "default": "GENERATE",
@@ -197,8 +197,8 @@ class GeminiNanoBananaPro:
             print(f"[NanoBananaPro] Correcting location 'us-central' to 'us-central1'")
             location = "us-central1"
         
-        # 1.5Force Global for Gemini 3 Pro (Experimental)
-        if model == "gemini-3-pro-image-preview":
+        # 1.5Force Global for Gemini models (Experimental)
+        if model in ["gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview"]:
             print(f"[NanoBananaPro] Forcing location 'global' for {model} (Experimental)")
             location = "global"
 
@@ -220,8 +220,8 @@ class GeminiNanoBananaPro:
                 print("Loaded API Key from file.")
              except: pass
 
-        # 1. Force Google AI Studio for Gemini 3 Pro payload formatting/endpoints
-        if model == "gemini-3-pro-image-preview":
+        # 1. Force Google AI Studio for Gemini models payload formatting/endpoints
+        if model in ["gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview"]:
              if not final_api_key:
                   return (torch.zeros((1, 64, 64, 3)), f"Error: '{model}' requires an API Key (Google AI Studio).")
              
@@ -456,8 +456,8 @@ class GeminiNanoBananaPro:
             if client:
                 print(f"Generating via Vertex AI SDK (Model: {model})...")
                 
-                # --- FIX: Gemini 3 Pro Generation using generate_content ---
-                if model == "gemini-3-pro-image-preview":
+                # --- FIX: Gemini Generation using generate_content ---
+                if model in ["gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview"]:
                     print(f"[NanoBananaPro] using generate_content for {model}")
                     try:
                          # 1. Prepare Content list

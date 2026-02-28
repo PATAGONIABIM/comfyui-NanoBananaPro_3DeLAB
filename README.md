@@ -6,9 +6,10 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 
 ---
 
-## 🇺🇸 English (v1.1.1)
+## 🇺🇸 English (v1.2.0)
 
 ### Features
+- **Unlocks Gemini 3.1 Flash Image Preview (Nano Banana 2)** for high-speed, high-volume image generation via `google-genai`.
 - **Unlocks Gemini 3 Pro** via `google-genai` library (replacing standard REST API).
 - **Supports Imagen 3** for advanced editing tasks (Inpainting, Outpainting, Background Swap).
 - Hybrid 1:1 Authentication:
@@ -47,7 +48,7 @@ To use the node, you need to provide authentication credentials in the node inpu
 
 ### Core Parameters
 - **prompt**: The text description of the image you want to generate.
-- **model**: Select the AI model to use (Gemini 3 Pro or Imagen 3 variants).
+- **model**: Select the AI model to use (Gemini 3 Pro, Gemini 3.1 Flash, or Imagen 3 variants).
 - **operation**: Choose the operation mode: Generate, Inpaint (Insert/Remove), Outpaint, or Background Swap.
 - **api_key**: Your Google AI Studio API Key. Required for Gemini models.
 - **service_account_json**: Absolute path to your Vertex AI Service Account JSON key file. Required for editing/inpainting.
@@ -62,9 +63,10 @@ To use the node, you need to provide authentication credentials in the node inpu
 
 ---
 
-## 🇪🇸 Español (v1.1.1)
+## 🇪🇸 Español (v1.2.0)
 
 ### Características
+- **Desbloquea Gemini 3.1 Flash Image Preview (Nano Banana 2)** para generación de alta velocidad y volumen mediante `google-genai`.
 - **Desbloquea Gemini 3 Pro** a través de la librería `google-genai` (reemplazo de API REST estándar).
 - **Soporta Imagen 3** para tareas avanzadas de edición (Inpainting, Outpainting, Cambio de Fondo).
 - Autenticación Híbrida 1:1:
@@ -103,7 +105,7 @@ Para usar el nodo, debes proporcionar las credenciales de autenticación en las 
 
 ### Parámetros Principales
 - **prompt**: La descripción de texto de la imagen que deseas generar.
-- **model**: Selecciona el modelo de IA a usar (Gemini 3 Pro o variantes de Imagen 3).
+- **model**: Selecciona el modelo de IA a usar (Gemini 3 Pro, Gemini 3.1 Flash o variantes de Imagen 3).
 - **operation**: Elige el modo de operación: Generar, Inpaint (Insertar/Eliminar), Outpaint o Cambio de Fondo.
 - **api_key**: Tu API Key de Google AI Studio. Requerida para modelos Gemini.
 - **service_account_json**: Ruta absoluta a tu archivo de clave JSON de Service Account de Vertex AI. Requerido para edición/inpainting con Imagen 3.
