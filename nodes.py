@@ -157,6 +157,12 @@ class GeminiNanoBananaPro:
                     "default": "IMAGE",
                     "tooltip": "Choose image only or image + reasoning text."
                 }),
+                "thinking": ("BOOLEAN", {
+                    "default": False,
+                    "label_on": "High",
+                    "label_off": "Minimal",
+                    "tooltip": "Enable High thinking level (gemini-3.1 flash/pro only)."
+                }),
                 # "files": ("STRING", {
                 #     "multiline": True, 
                 #     "placeholder": "Path to local file (PDF/TXT)",
@@ -176,7 +182,7 @@ class GeminiNanoBananaPro:
     CATEGORY = "3DELAB"
     COLOR = "#940000"
 
-    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", images=None, mask=None, scribble=None, files=None, system_prompt=""):
+    def generate(self, prompt, model, operation, api_key="", service_account_json="", seed=None, aspect_ratio="1:1", resolution="1K", response_modalities="IMAGE", thinking=False, images=None, mask=None, scribble=None, files=None, system_prompt=""):
         scribble_mask = scribble
         # Defaults for hidden inputs
         project_id = ""
@@ -515,6 +521,7 @@ class GeminiNanoBananaPro:
                                  contents=message_parts,
                                  config=types.GenerateContentConfig(
                                      response_modalities=["IMAGE", "TEXT"] if response_modalities == "IMAGE+TEXT" else ["IMAGE"],
+                                     thinking_config=types.ThinkingConfig(thinking_level="High" if thinking else "minimal", include_thoughts=thinking) if (model in ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"] and hasattr(types, "ThinkingConfig") and thinking) else None,
                                      image_config=types.ImageConfig(
                                          aspect_ratio=aspect_ratio,
                                          image_size=resolution
@@ -535,6 +542,7 @@ class GeminiNanoBananaPro:
                                          contents=message_parts,
                                          config=types.GenerateContentConfig(
                                              response_modalities=["IMAGE", "TEXT"] if response_modalities == "IMAGE+TEXT" else ["IMAGE"],
+                                             thinking_config=types.ThinkingConfig(thinking_level="High" if thinking else "minimal", include_thoughts=thinking) if (model in ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"] and hasattr(types, "ThinkingConfig") and thinking) else None,
                                              image_config=types.ImageConfig(
                                                  aspect_ratio=aspect_ratio,
                                                  image_size=resolution
@@ -666,6 +674,11 @@ class GeminiNanoBananaPro:
             generation_config = {
                 "responseModalities": [response_modalities] if response_modalities == "IMAGE" else ["TEXT", "IMAGE"],
             }
+            if thinking and model in ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"]:
+                generation_config["thinkingConfig"] = {
+                    "thinkingLevel": "High",
+                    "includeThoughts": True
+                }
             if aspect_ratio:
                  generation_config["imageConfig"] = {"aspectRatio": aspect_ratio}
 
@@ -746,11 +759,11 @@ class GeminiVeo31VideoGenerator:
                     "default": "A cinematic shot of...",
                     "tooltip": "The text description of the video you want to generate."
                 }),
-                "model": (["veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"], {
+                "model": (["veo-2.0-generate-preview", "veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"], {
                     "default": "veo-3.1-generate-preview",
-                    "tooltip": "Select the Veo 3.1 model."
+                    "tooltip": "Select the Veo model. (Note: veo-2.0 is required for inpainting/mask operations in some API versions)."
                 }),
-                "mode": (["text_to_video", "image_to_video", "first_last_frame", "extend_video"], {
+                "mode": (["text_to_video", "image_to_video", "first_last_frame", "extend_video", "inpaint_insertion", "inpaint_removal"], {
                     "default": "text_to_video",
                     "tooltip": "Select the generation mode."
                 }),
@@ -767,12 +780,29 @@ class GeminiVeo31VideoGenerator:
                     "placeholder": "Gemini API Key",
                     "tooltip": "Your Google AI Studio API Key. Required."
                 }),
+                "service_account_json": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "placeholder": "Path to JSON Key (Vertex AI)",
+                    "tooltip": "Absolute path to your Vertex AI Service Account JSON key file. Required for Veo 2.0 Inpainting."
+                }),
+                "gcs_bucket": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "placeholder": "Google Cloud Storage Bucket Name",
+                    "tooltip": "Name of your Cloud Storage bucket (e.g. 'my-veo-bucket'). Required for Veo 2.0 Inpainting."
+                }),
                 "image": ("IMAGE", {"tooltip": "Input image (for image_to_video, first frame of FF2LF, or reference images for txt2v)."}),
                 "last_frame": ("IMAGE", {"tooltip": "Ending frame. Used only in first_last_frame mode."}),
-                "video": ("STRING", {
+                "mask": ("MASK", {"tooltip": "Mask image for inpaint_insertion and inpaint_removal modes (white=edit, black=keep)."}),
+                "video": ("VIDEO", {
+                    "forceInput": True,
+                    "tooltip": "Connect a Load Video output for inpainting or extending."
+                }),
+                "video_extend_in": ("STRING", {
                     "forceInput": True,
                     "default": "",
-                    "tooltip": "Connect the output_video from a previous Veo 3.1 node to extend it. Required for extend_video."
+                    "tooltip": "Connect the video_extend (URI string) from a previous Veo node to extend it."
                 }),
                 "aspect_ratio": (["16:9", "9:16"], {
                     "default": "16:9",
@@ -800,11 +830,134 @@ class GeminiVeo31VideoGenerator:
     CATEGORY = "3DELAB"
     COLOR = "#940000"
 
-    def generate(self, prompt, model, mode, negative_prompt="", api_key="", image=None, last_frame=None, video="", aspect_ratio="16:9", resolution="720p", duration="4", person_generation="allow_all", seed=42):
-        print(f"--- [NanoBananaPro] Starting Veo 3.1: {mode} ---")
-        api_key = api_key.strip()
+    def upload_file_to_gemini(self, file_path, api_key):
+        """Uploads a local file to Gemini File API and returns the URI."""
+        try:
+            mime_type = "video/mp4"
+            if file_path.lower().endswith(".webm"):
+                mime_type = "video/webm"
+            elif file_path.lower().endswith(".mov"):
+                mime_type = "video/quicktime"
+            
+            print(f"Uploading {file_path} to Gemini File API...")
+            headers = {"x-goog-api-key": api_key}
+            with open(file_path, "rb") as f:
+                files = {"file": (os.path.basename(file_path), f, mime_type)}
+                resp = requests.post("https://generativelanguage.googleapis.com/upload/v1beta/files", headers=headers, files=files)
+            
+            if resp.status_code == 200:
+                uri = resp.json().get("file", {}).get("uri")
+                print(f"Successfully uploaded. URI: {uri}")
+                return uri, mime_type
+            else:
+                print(f"File upload failed: {resp.status_code} {resp.text}")
+                return None, None
+        except Exception as e:
+            print(f"Exception during file upload: {e}")
+            return None, None
+
+    def upload_file_to_gcs(self, file_path, bucket_name):
+        """Uploads a local file to a Google Cloud Storage bucket and returns the gs:// URI."""
+        try:
+            from google.cloud import storage
+            client = storage.Client()
+            bucket = client.bucket(bucket_name.strip())
+            
+            blob_name = f"nano_banana_pro_veo_{int(time.time())}_{os.path.basename(file_path)}"
+            blob = bucket.blob(blob_name)
+            
+            mime_type = "video/mp4"
+            if file_path.lower().endswith(".webm"):
+                mime_type = "video/webm"
+            elif file_path.lower().endswith(".mov"):
+                mime_type = "video/quicktime"
+            elif file_path.lower().endswith(".png"):
+                mime_type = "image/png"
+            
+            print(f"Uploading {file_path} to Google Cloud Storage: gs://{bucket_name}/{blob_name} ...")
+            blob.upload_from_filename(file_path, content_type=mime_type)
+            
+            gs_uri = f"gs://{bucket.name}/{blob.name}"
+            print(f"Successfully uploaded to GCS. URI: {gs_uri}")
+            return gs_uri, mime_type
+        except ImportError:
+             print("Error: 'google-cloud-storage' library is required for Veo 2.0. run: pip install google-cloud-storage")
+             return None, None
+        except Exception as e:
+             print(f"Exception during GCS upload: {e}")
+             return None, None
+
+    def resolve_video_input(self, video_input, video_extend_in=""):
+        """Resolves the unified video input to either a local filepath or an existing URI."""
+        if video_extend_in and getattr(video_extend_in, "startswith", lambda x: False)("https://") or getattr(video_extend_in, "startswith", lambda x: False)("gs://"):
+            return None, video_extend_in
+            
+        if not video_input:
+            return None, None
+
+        # 1. Local File Path directly (String)
+        if hasattr(video_input, "startswith") and os.path.exists(video_input):
+            return video_input, None
+            
+        # 2. ComfyUI Native VIDEO Object (InputImpl.VideoFromFile logic)
+        if hasattr(video_input, "path") and os.path.exists(getattr(video_input, "path", "")):
+             return video_input.path, None
+             
+        # 3. ComfyUI hidden attributes (sometimes objects wrap it as _video or _path)
+        if hasattr(video_input, "_path") and os.path.exists(getattr(video_input, "_path", "")):
+             return video_input._path, None
+             
+        # 4. Comfy API v1 latest (it stores as __file, which Python mangles to _VideoFromFile__file)
+        if hasattr(video_input, "_VideoFromFile__file"):
+             p = getattr(video_input, "_VideoFromFile__file")
+             if isinstance(p, str) and os.path.exists(p): return p, None
+             
+        # 5. Another variant: Some video objects might use get_file_path()
+        if hasattr(video_input, "get_file_path"):
+             try:
+                 p = video_input.get_file_path()
+                 if os.path.exists(p): return p, None
+             except: pass
+
+        # 6. Dictionary object (Alternative way some custom nodes pass video)
+        if isinstance(video_input, dict) and "path" in video_input and os.path.exists(video_input["path"]):
+             return video_input["path"], None
+             
+        # 7. List/Tuple containing a path or object
+        if isinstance(video_input, (list, tuple)) and len(video_input) > 0:
+             return self.resolve_video_input(video_input[0], video_extend_in)
+             
+        # 8. Fallback: Parse string representation directly (e.g. <VideoFromFile 'C:\...'>)
+        vid_str = str(video_input)
+        if "VideoFromFile" in vid_str or "Video" in vid_str:
+            # Extract everything between quotes
+            import re
+            matches = re.findall(r"['\"](.*?)['\"]", vid_str)
+            for m in matches:
+                if os.path.exists(m):
+                    print(f"NanoBananaPro parsed hidden path: {m}")
+                    return m, None
+             
+        print(f"Warning: Could not parse video input format: {type(video_input)} - Value: {vid_str}")
+        return None, None
+
+    def generate(self, prompt, model, mode, negative_prompt="", api_key="", service_account_json="", gcs_bucket="", image=None, last_frame=None, mask=None, video=None, video_extend_in="", aspect_ratio="16:9", resolution="720p", duration="4", person_generation="allow_all", seed=42):
+        print(f"--- [NanoBananaPro] Starting Veo 3.1/2.0: {mode} ---")
         
-        # Read API key from file if it's a path
+        # Early Validation for Mask
+        if mode in ["inpaint_insertion", "inpaint_removal"]:
+            if mask is None:
+                print("Error: Inpaint modes require a mask input.")
+                return ("Error: 'mask' input is required for inpaint modes. Please connect a mask.", "")
+            if torch.max(mask) == 0.0:
+                print("Error: The mask tensor is completely empty (no white pixels).")
+                return ("Error: You connected a mask, but it's completely empty. Right-click the Image node -> 'Open in MaskEditor', draw your mask, and 'Save to node' before queuing.", "")
+
+        api_key = api_key.strip()
+        service_account_json = service_account_json.strip()
+        gcs_bucket = gcs_bucket.strip()
+        
+        # Read files if they are paths
         if api_key and os.path.isfile(api_key):
              try:
                 with open(api_key, 'r') as f:
@@ -813,17 +966,177 @@ class GeminiVeo31VideoGenerator:
              except Exception as e:
                  print(f"Error reading API key file: {e}")
 
-        if not api_key:
-            return ("Error: API Key is required.",)
+        # Determine Route (Vertex vs Gemini API)
+        using_vertex = False
+        project_id = ""
+        location = "us-central1"
+        client = None
 
-        # Helper to convert Tensor [B, H, W, C] to Base64
+        if service_account_json and mode in ["inpaint_insertion", "inpaint_removal", "extend_video"] and model == "veo-2.0-generate-preview":
+            if not os.path.exists(service_account_json):
+                return (f"Error: JSON Key file not found at: {service_account_json}", "")
+            if not gcs_bucket:
+                return ("Error: 'gcs_bucket' is required when using Vertex AI (service_account_json).", "")
+            if not GOOGLE_GENAI_AVAILABLE:
+                return ("Error: 'google-genai' library missing. Install it for Vertex AI.", "")
+            
+            try:
+                with open(service_account_json, 'r') as f:
+                    creds = json.load(f)
+                    if "project_id" in creds:
+                        project_id = creds["project_id"]
+                        print(f"[NanoBananaPro] Auto-detected Project ID: {project_id}")
+            except Exception as e:
+                print(f"[NanoBananaPro] Warning: Could not parse Project ID from JSON: {e}")
+            
+            if not project_id:
+                return ("Error: Project ID could not be determined from the service account JSON.", "")
+            
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_json
+            os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+            try:
+                client = genai.Client(vertexai=True, project=project_id, location=location)
+                using_vertex = True
+                print("[NanoBananaPro] Configured for Vertex AI via python SDK.")
+            except Exception as e:
+                return (f"Error Initializing Vertex Client: {e}", "")
+        elif not api_key:
+             return ("Error: API Key is required when not using Vertex AI.", "")
+
+        # Helper to convert Tensor [B, H, W, C] to Base64 (RGB/RGBA)
         def tensor_to_b64(tensor):
             i_np = (tensor.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
             img = Image.fromarray(i_np)
             buffered = io.BytesIO()
             img.save(buffered, format="PNG")
             return base64.b64encode(buffered.getvalue()).decode("utf-8")
+            
+        # Helper to convert Single Channel Mask Tensor [B, H, W] to Base64
+        def mask_to_b64(tensor):
+            i_np = (tensor.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+            if len(i_np.shape) == 3 and i_np.shape[0] == 1:
+                i_np = i_np[0]
+            img = Image.fromarray(i_np, mode='L')
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
+        # Helper to save Tensor locally for Vertex GCS Uploads
+        def tensor_to_temp_file(tensor, prefix="img"):
+            i_np = (tensor.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+            if len(i_np.shape) == 3 and i_np.shape[0] == 1:
+                i_np = i_np[0] # Handle 1-channel masks
+            mode = 'L' if len(i_np.shape) == 2 else 'RGB'
+            img = Image.fromarray(i_np, mode=mode)
+            temp_path = os.path.join(folder_paths.get_temp_directory(), f"nanobanana_tmp_{prefix}_{int(time.time())}.png")
+            img.save(temp_path)
+            return temp_path
+
+        # If Using Vertex SDK (Inpainting Veo 2.0)
+        if using_vertex:
+            if mode in ["inpaint_insertion", "inpaint_removal"] and mask is None:
+                return (f"Error: 'mask' node input is required for {mode} mode.", "")
+            
+            local_vid_path, existing_uri = self.resolve_video_input(video, video_extend_in)
+            if not local_vid_path and not existing_uri:
+                 return (f"Error: Valid 'video' or 'video_extend_in' connection required for Vertex {mode}.", "")
+            
+            video_gcs_uri = existing_uri
+            if local_vid_path:
+                print(f"Vertex Mode: Uploading video {local_vid_path} to GCS...")
+                uploaded_uri, upload_mime = self.upload_file_to_gcs(local_vid_path, gcs_bucket)
+                if uploaded_uri:
+                    video_gcs_uri = uploaded_uri
+                else:
+                    return ("Error: Failed to upload video to GCS.", "")
+
+            # If mode is extend, the config structure in Vertex is slightly different.
+            if mode == "extend_video":
+                 config = types.GenerateVideosConfig(
+                        aspect_ratio=aspect_ratio,
+                        person_generation=person_generation.upper() if person_generation != "allow_adult" else "ALLOW_ADULT",
+                        output_gcs_uri=f"gs://{gcs_bucket}/outputs/", 
+                 )
+                 source = types.GenerateVideosSource(
+                        prompt=prompt if prompt else "extend the video",
+                        video=types.Video(uri=video_gcs_uri, mime_type="video/mp4")
+                 )
+            else:
+                # Mask needs to go to GCS too for Vertex Veo 2.0 Inpaint
+                temp_mask_path = tensor_to_temp_file(mask[0], prefix="mask")
+                mask_gcs_uri, _ = self.upload_file_to_gcs(temp_mask_path, gcs_bucket)
+                if not mask_gcs_uri:
+                     return ("Error: Failed to upload mask to GCS.", "")
+                
+                mask_mode = types.VideoGenerationMaskMode.INSERT if mode == "inpaint_insertion" else types.VideoGenerationMaskMode.REMOVE
+                
+                safe_prompt = prompt if prompt else "Remove the object" 
+                
+                config = types.GenerateVideosConfig(
+                            mask=types.VideoGenerationMask(
+                                image=types.Image(gcs_uri=mask_gcs_uri, mime_type="image/png"),
+                                mask_mode=mask_mode,
+                            ),
+                            aspect_ratio=aspect_ratio,
+                            person_generation=person_generation.upper() if person_generation != "allow_adult" else "ALLOW_ADULT",
+                            output_gcs_uri=f"gs://{gcs_bucket}/outputs/", 
+                )
+                source = types.GenerateVideosSource(
+                            prompt=safe_prompt,
+                            video=types.Video(uri=video_gcs_uri, mime_type="video/mp4")
+                )
+            
+            print("Sending generation request to Vertex AI Veo 2.0...")
+            try:
+                # Execute Vertex SDK Call
+                operation = client.models.generate_videos(
+                    model=model,
+                    source=source,
+                    config=config,
+                )
+                
+                print("Vertex AI Processing began. Waiting for completion...")
+                while not operation.done:
+                    time.sleep(15)
+                    operation = client.operations.get(operation)
+                    print("Status update:", getattr(operation, "name", "Polling..."))
+                
+                if operation.response:
+                    out_uri = operation.result.generated_videos[0].video.uri
+                    print(f"Vertex AI Generation Complete! Output URI: {out_uri}")
+                    
+                    # Download from GCS to ComfyUI Output directory
+                    try:
+                        from google.cloud import storage
+                        out_bucket_name = out_uri.split("gs://")[1].split("/")[0]
+                        out_blob_name = out_uri.split(f"gs://{out_bucket_name}/")[1]
+                        
+                        dl_client = storage.Client()
+                        dl_bucket = dl_client.bucket(out_bucket_name)
+                        dl_blob = dl_bucket.blob(out_blob_name)
+                        
+                        output_dir = folder_paths.get_output_directory()
+                        local_filename = f"veo20_inpaint_{int(time.time())}.mp4"
+                        local_out_path = os.path.join(output_dir, local_filename)
+                        
+                        print(f"Downloading {out_uri} to {local_out_path}...")
+                        dl_blob.download_to_filename(local_out_path)
+                        print("Download complete!")
+                        
+                        return (local_out_path, out_uri)
+                    except Exception as dl_e:
+                        print(f"Error downloading from GCS: {dl_e}")
+                        return (out_uri, out_uri) # Fallback to string if download fails
+                        
+                else:
+                    return (f"Vertex AI Error: {operation.error}", "")
+                    
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return (f"Exception calling Vertex AI: {e}", "")
+
+        # --- Standard REST API Execution (Veo 3.1) ---
         base_url = "https://generativelanguage.googleapis.com/v1beta"
         url = f"{base_url}/models/{model}:predictLongRunning"
         headers = {
@@ -832,7 +1145,6 @@ class GeminiVeo31VideoGenerator:
         }
 
         # Build constraints
-        # durationSeconds must be forced to "8" for 1080p or 4k (per documentation)
         if resolution in ["1080p", "4k"] or mode == "extend_video":
             duration_val = 8
         else:
@@ -846,10 +1158,14 @@ class GeminiVeo31VideoGenerator:
             "seed": seed % 4294967296
         }
             
-        if negative_prompt.strip():
+        if negative_prompt.strip() and mode != "inpaint_removal":
             parameters["negativePrompt"] = negative_prompt.strip()
 
-        instance = {"prompt": prompt}
+        # Prompt is ignored/should be empty for pure removal, but required for insertion
+        if mode == "inpaint_removal":
+            instance = {"prompt": ""} 
+        else:
+            instance = {"prompt": prompt}
 
         # Handle Modes & Overrides
         if mode == "text_to_video":
@@ -873,7 +1189,7 @@ class GeminiVeo31VideoGenerator:
 
         elif mode == "image_to_video":
             if image is None:
-                return ("Error: 'image' input is required for image_to_video mode.",)
+                return ("Error: 'image' input is required for image_to_video mode.", "")
             img_b64 = tensor_to_b64(image[0])
             instance["image"] = {
                 "bytesBase64Encoded": img_b64,
@@ -882,7 +1198,63 @@ class GeminiVeo31VideoGenerator:
             if person_generation == "allow_all":
                 parameters["personGeneration"] = "allow_adult"
 
+        elif mode in ["inpaint_insertion", "inpaint_removal"]:
+            if mask is None:
+                return (f"Error: 'mask' node input is required for {mode} mode.", "")
+            
+            local_vid_path, existing_uri = self.resolve_video_input(video, video_extend_in)
+            video_uri_to_use = existing_uri
+            video_mime = "video/mp4"
+
+            if local_vid_path:
+                print(f"Processing local video for inpainting from: {local_vid_path}")
+                uploaded_uri, upload_mime = self.upload_file_to_gemini(local_vid_path, api_key)
+                if uploaded_uri:
+                    video_uri_to_use = uploaded_uri
+                    video_mime = upload_mime
+                else:
+                    return ("Error: Failed to upload video to Gemini File API.", "")
+                    
+            if not video_uri_to_use:
+                 # Fallback to single image if video input fails but image is provided
+                 print("Warning: No valid 'video' input found. Falling back to static image processing for inpaint.")
+                 if image is None:
+                     return (f"Error: Valid 'video' connection or fallback 'image' required for {mode}.", "")
+                 
+                 img_b64 = tensor_to_b64(image[0])
+                 # Vertex AI docs state video object can hold fileUri, but image holds bytesBase64Encoded.
+                 instance["image"] = {
+                     "bytesBase64Encoded": img_b64,
+                     "mimeType": "image/png"
+                 }
+            else:
+                # Based on Vertex AI API schema for Veo 2.0 inpainting
+                # Note: The API uses gcsUri or fileUri depending on the exact endpoint version (Vertex vs Gemini)
+                # Since we are using the Gemini API endpoint, we continue using fileData if that's what File API returns
+                # or a simple structure if it matches the Veo 3.1 extend format.
+                instance["video"] = {
+                    "fileData": {
+                        "fileUri": video_uri_to_use,
+                        "mimeType": video_mime
+                    }
+                }
+            
+            mask_b64 = mask_to_b64(mask[0])
+            mask_mode = "insert" if mode == "inpaint_insertion" else "remove"
+            # As per Vertex AI payload example:
+            # "mask": { "gcsUri": "...", "mimeType": "...", "maskMode": "insert" }
+            # Since we have base64 from ComfyUI instead of a GCS URI:
+            instance["mask"] = {
+                "bytesBase64Encoded": mask_b64,
+                "mimeType": "image/png",
+                "maskMode": mask_mode
+            }
+            
+            if person_generation == "allow_all":
+                parameters["personGeneration"] = "allow_adult"
+
         elif mode == "first_last_frame":
+
             if image is None or last_frame is None:
                return ("Error: Both 'image' and 'last_frame' are required for first_last_frame mode.",)
             img_b64 = tensor_to_b64(image[0])
@@ -902,18 +1274,27 @@ class GeminiVeo31VideoGenerator:
                 parameters["personGeneration"] = "allow_adult"
 
         elif mode == "extend_video":
-            if not video:
-                return ("Error: 'video' input is required for extend_video mode.", "")
-            if not video.startswith("https://"):
-                return ("Error: For extend_video, you MUST connect the 'video_uri' output from a previous Veo 3.1 node into this 'video' input. Do not connect the 'output_video' local path.", "")
+            local_vid_path, existing_uri = self.resolve_video_input(video, video_extend_in)
             
-            instance["video"] = {"uri": video}
+            # If the user passed a ComfyUI VIDEO, we can upload it to Gemini!
+            if local_vid_path and not existing_uri:
+                print(f"Processing local video for extending from: {local_vid_path}")
+                uploaded_uri, upload_mime = self.upload_file_to_gemini(local_vid_path, api_key)
+                if uploaded_uri:
+                    existing_uri = uploaded_uri
+                else:
+                    return ("Error: Failed to upload local video for extending.", "")
+
+            if not existing_uri or not existing_uri.startswith("https://"):
+                return ("Error: Invalid video format for extending. Must be a previously generated Veo output or a valid Load Video.", "")
             
-            # Remove parameters that aren't allowed or override them correctly
+            # Veo 3.1 explicitly rejects fileData on the REST endpoint
+            instance["video"] = {"uri": existing_uri}
+            
+            # Remove parameters that aren't allowed for extend_video in Gemini API
+            parameters.pop("resolution", None)
+            parameters.pop("durationSeconds", None)
             parameters["sampleCount"] = 1
-            parameters["resolution"] = "720p" # force 720p
-            # Usually extended video duration doesn't matter, but SDK keeps resolution and sampleCount.
-            # Number of videos parameter is mapped to sampleCount internally in some backend SDKs
 
         payload = {
             "instances": [instance],
@@ -1038,3 +1419,141 @@ class NanoBananaPreviewVideo:
                 ]
             }
         }
+
+
+class LoadVideoExtract:
+    @classmethod
+    def INPUT_TYPES(s):
+        input_dir = folder_paths.get_input_directory()
+        files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
+        files = folder_paths.filter_files_content_types(files, ["video"])
+        return {
+            "required": {
+                "video": (sorted(files), {"video_upload": True}),
+                "frame_target": ("INT", {"default": 0, "min": 0, "max": 99999, "step": 1, "tooltip": "Frame number to extract and save."}),
+                "save_prefix": ("STRING", {"default": "extracted_frame", "tooltip": "Prefix for the automatically saved image file."})
+            }
+        }
+
+    CATEGORY = "3DELAB"
+    COLOR = "#940000"
+    RETURN_TYPES = ("VIDEO", "IMAGE")
+    RETURN_NAMES = ("video", "extracted_image")
+    FUNCTION = "load_video"
+
+    def load_video(self, video, frame_target, save_prefix):
+        video_path = folder_paths.get_annotated_filepath(video)
+        
+        # 1. Output VIDEO object
+        try:
+            from comfy_api.latest._input_impl.video_types import VideoFromFile
+            video_out = VideoFromFile(video_path)
+        except ImportError:
+            video_out = video_path
+
+        # 2. Extract specific frame using OpenCV and save to input folder
+        image_tensor = torch.zeros((1, 64, 64, 3)) # Default fallback
+        try:
+            import cv2
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                print(f"[NanoBananaPro] Error: Could not open video {video_path}")
+            else:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_target)
+                ret, frame = cap.read()
+                if ret:
+                    # Convert BGR (OpenCV) to RGB
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Instead of returning a tensor, we save it physically to ComfyUI's input dir
+                    # so the user can use an Image node and open it in the Mask Editor.
+                    input_dir = folder_paths.get_input_directory()
+                    file_name = f"!_nano_{save_prefix}_{int(time.time())}.png"
+                    save_path = os.path.join(input_dir, file_name)
+                    
+                    # Save as PNG
+                    img_pil = Image.fromarray(frame_rgb)
+                    img_pil.save(save_path)
+                    
+                    # Convert to normalized float32 tensor [1, H, W, C] for downstream nodes
+                    img_np = np.array(frame_rgb).astype(np.float32) / 255.0
+                    image_tensor = torch.from_numpy(img_np)[None,]
+
+                    # Notify UI to auto-select this file
+                    try:
+                        import server
+                        server.PromptServer.instance.send_sync("nanobanana_video_extracted", {"filename": file_name})
+                    except Exception as e:
+                        print(f"[NanoBananaPro] Warning: Could not send UI sync message: {e}")
+                    
+                    print(f"[NanoBananaPro] Extracted frame {frame_target} successfully.")
+                    print(f"[NanoBananaPro] Saved physical image to: {save_path}")
+                else:
+                    print(f"[NanoBananaPro] Warning: Could not read frame {frame_target} from {video_path}. It may exceed the video length.")
+                cap.release()
+        except ImportError:
+            print("[NanoBananaPro] Error: OpenCV (cv2) is required for frame extraction. Install with: pip install opencv-python")
+        except Exception as e:
+            print(f"[NanoBananaPro] Error extracting frame: {e}")
+
+        return (video_out, image_tensor)
+
+class ImagePassthrough:
+    @classmethod
+    def INPUT_TYPES(s):
+        input_dir = folder_paths.get_input_directory()
+        files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
+        exts = ['.png', '.jpg', '.jpeg', '.webp']
+        files = [f for f in files if any(f.lower().endswith(ext) for ext in exts)]
+        return {
+            "required": {
+                "image": (sorted(files), {"image_upload": True}),
+            },
+            "optional": {
+                "image_in": ("IMAGE", {"tooltip": "If connected, this image overrides the selected file."}),
+            }
+        }
+
+    CATEGORY = "3DELAB"
+    COLOR = "#940000"
+    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_NAMES = ("image", "mask")
+    FUNCTION = "load_image"
+
+    @classmethod
+    def VALIDATE_INPUTS(s, image, image_in=None):
+        if image.startswith("clipspace/"):
+            return True
+        if not folder_paths.exists_annotated_filepath(image):
+            return "Invalid image file: {}".format(image)
+        return True
+
+    def load_image(self, image, image_in=None):
+        image_path = folder_paths.get_annotated_filepath(image)
+        try:
+            i = Image.open(image_path)
+            i = ImageOps.exif_transpose(i)
+            
+            # Extract Mask from alpha channel (like standard LoadImage)
+            if 'A' in i.getbands():
+                mask = np.array(i.getchannel('A')).astype(np.float32) / 255.0
+                mask = 1. - mask
+                mask = torch.from_numpy(mask)
+            else:
+                mask = torch.zeros((64,64), dtype=torch.float32, device="cpu")
+                
+            image_rgb = i.convert("RGB")
+            image_np = np.array(image_rgb).astype(np.float32) / 255.0
+            image_tensor = torch.from_numpy(image_np)[None,]
+            
+        except Exception as e:
+            print(f"[NanoBananaPro] Error loading image {image_path}: {e}")
+            image_tensor = torch.zeros((1, 64, 64, 3))
+            mask = torch.zeros((64,64), dtype=torch.float32, device="cpu")
+
+        if image_in is not None:
+            print(f"[NanoBananaPro] ImagePassthrough: Using incoming image connection. Preserving mask from {image}.")
+            return (image_in, mask.unsqueeze(0))
+
+        print(f"[NanoBananaPro] ImagePassthrough: Loading file {image}")
+        return (image_tensor, mask.unsqueeze(0))

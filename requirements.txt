@@ -2,3 +2,5 @@ google-genai
 requests
 numpy
 Pillow
+google-cloud-storage
+opencv-python
