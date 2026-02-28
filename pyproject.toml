@@ -1,7 +1,7 @@
 [project]
-name = "NanoBanana_Veo_Suite_3DeLAB"
+name = "NanoBananaPro3_Direct"
 description = "Gemini 3.1 Flash, Gemini 3 Pro and Vertex AI Imagen 3 Models Node for ComfyUI. image generation | inpaint | outpaint | background swap"
-version = "1.3.1"
+version = "1.3.2"
 license = {file = "LICENSE"} 
 requires-python = ">=3.10"
 dependencies = [
@@ -37,6 +37,6 @@ Documentation = "https://github.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB/bl
 
 [tool.comfy]
 PublisherId = "nenu"
-DisplayName = "NanoBananaPro_3DeLAB"
+DisplayName = "NanoBanana&Veo_Suite_3DeLAB"
 Icon = "https://raw.githubusercontent.com/PATAGONIABIM/comfyui-NanoBananaPro_3DeLAB/main/icon.png"
 # Banner = "" # No banner provided yet
