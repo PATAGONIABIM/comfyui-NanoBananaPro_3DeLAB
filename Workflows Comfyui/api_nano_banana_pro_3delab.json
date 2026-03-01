@@ -17,6 +17,180 @@
       "title": "image_2"
     }
   },
+  "30": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "55": {
+    "inputs": {
+      "prompt": "el sol atrás del edificio tubular, realista,",
+      "model": "gemini-3.1-flash-image-preview",
+      "operation": "GENERATE",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "seed": 511829517092178,
+      "aspect_ratio": "16:9",
+      "resolution": "1K",
+      "response_modalities": "IMAGE",
+      "thinking": false,
+      "system_prompt": "You are an expert image-generation engine. You must ALWAYS produce an image.",
+      "images": [
+        "135",
+        0
+      ],
+      "scribble": [
+        "135",
+        1
+      ]
+    },
+    "class_type": "GeminiNanoBananaPro",
+    "_meta": {
+      "title": "Nano Banana Pro (Gemini Direct)"
+    }
+  },
+  "79": {
+    "inputs": {
+      "video_path": [
+        "101",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "83": {
+    "inputs": {
+      "image": "ComfyUI_00055_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "94": {
+    "inputs": {
+      "prompt": "3d orbit arround the tubular building,",
+      "model": "veo-2.0-generate-preview",
+      "mode": "inpaint_insertion",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 1104997317710911,
+      "mask": [
+        "99",
+        1
+      ],
+      "video": [
+        "97",
+        0
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
+  "96": {
+    "inputs": {
+      "video_path": [
+        "94",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "97": {
+    "inputs": {
+      "video": "veo31_image_to_video_b1adf388.mp4",
+      "frame_target": 0,
+      "save_prefix": "ejale",
+      "video-preview": ""
+    },
+    "class_type": "LoadVideoExtract_3DeLAB",
+    "_meta": {
+      "title": "Load Video (Extract Frame)"
+    }
+  },
+  "99": {
+    "inputs": {
+      "image": "!_nano_ejale_1772305970.png",
+      "image_in": [
+        "97",
+        1
+      ]
+    },
+    "class_type": "ImagePassthrough_3DeLAB",
+    "_meta": {
+      "title": "Load Image (Passthrough)"
+    }
+  },
+  "101": {
+    "inputs": {
+      "prompt": "continue 3d orbit arround the tubular building,",
+      "model": "veo-3.1-generate-preview",
+      "mode": "extend_video",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 793865133047344,
+      "video_extend_in": [
+        "102",
+        1
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
+  "102": {
+    "inputs": {
+      "prompt": "continue 3d orbit arround the tubular building,",
+      "model": "veo-3.1-generate-preview",
+      "mode": "image_to_video",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 147105191581551,
+      "image": [
+        "83",
+        0
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
   "103": {
     "inputs": {
       "prompt": "el sol atrás del edificio tubular, realista,",
@@ -24,7 +198,7 @@
       "operation": "GENERATE",
       "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
       "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
-      "seed": 49934347929185,
+      "seed": 183257816860600,
       "aspect_ratio": "16:9",
       "resolution": "1K",
       "response_modalities": "IMAGE",
@@ -71,6 +245,218 @@
       "title": "image_3"
     }
   },
+  "106": {
+    "inputs": {
+      "image": "!_nano_ejale_1772305970.png"
+    },
+    "class_type": "ImagePassthrough_3DeLAB",
+    "_meta": {
+      "title": "last frame"
+    }
+  },
+  "108": {
+    "inputs": {
+      "video_path": [
+        "109",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "109": {
+    "inputs": {
+      "prompt": "3d orbit arround the tubular building,",
+      "model": "veo-3.1-generate-preview",
+      "mode": "first_last_frame",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 1104997317710911,
+      "image": [
+        "110",
+        0
+      ],
+      "last_frame": [
+        "106",
+        0
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
+  "110": {
+    "inputs": {
+      "image": "ComfyUI_temp_zfvsh_00002_.png [temp]"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "first frame"
+    }
+  },
+  "111": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "112",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "112": {
+    "inputs": {
+      "prompt": "el sol atrás del edificio tubular, realista,",
+      "model": "gemini-3.1-flash-image-preview",
+      "operation": "INPAINT_INSERTION",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "seed": 1022512861039067,
+      "aspect_ratio": "16:9",
+      "resolution": "1K",
+      "response_modalities": "IMAGE",
+      "thinking": false,
+      "system_prompt": "You are an expert image-generation engine. You must ALWAYS produce an image.",
+      "images": [
+        "114",
+        0
+      ],
+      "mask": [
+        "114",
+        1
+      ]
+    },
+    "class_type": "GeminiNanoBananaPro",
+    "_meta": {
+      "title": "Nano Banana Pro (Gemini Direct)"
+    }
+  },
+  "114": {
+    "inputs": {
+      "image": "ComfyUI_00055_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "120": {
+    "inputs": {
+      "prompt": "A cinematic view of a modern tubular building integrated smoothly into a lush natural landscape. Soft sunlight illuminating the structure and the surrounding nature, A WOMAN WALKING ARROUND",
+      "model": "veo-2.0-generate-exp",
+      "mode": "reference images",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "1080p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 1104997317710911,
+      "image": [
+        "124",
+        0
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
+  "121": {
+    "inputs": {
+      "image": "ComfyUI_00055_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_1"
+    }
+  },
+  "122": {
+    "inputs": {
+      "image": "Flux2-Klein_00013_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_2"
+    }
+  },
+  "123": {
+    "inputs": {
+      "image": "ComfyUI_00007_.webp"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_3"
+    }
+  },
+  "124": {
+    "inputs": {
+      "inputcount": 3,
+      "Update inputs": null,
+      "image_1": [
+        "121",
+        0
+      ],
+      "image_2": [
+        "122",
+        0
+      ],
+      "image_3": [
+        "123",
+        0
+      ]
+    },
+    "class_type": "ImageBatchMulti",
+    "_meta": {
+      "title": "Image Batch Multi"
+    }
+  },
+  "125": {
+    "inputs": {
+      "video_path": [
+        "120",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "126": {
+    "inputs": {
+      "prompt": "3d orbit arround the tubular building,",
+      "model": "veo-3.1-generate-preview",
+      "mode": "text_to_video",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 1104997317710911
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
   "127": {
     "inputs": {
       "images": [
@@ -81,6 +467,74 @@
     "class_type": "PreviewImage",
     "_meta": {
       "title": "Preview Image"
+    }
+  },
+  "129": {
+    "inputs": {
+      "video_path": [
+        "126",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "130": {
+    "inputs": {
+      "video_path": [
+        "131",
+        0
+      ]
+    },
+    "class_type": "NanoBananaPreviewVideo",
+    "_meta": {
+      "title": "Veo Video Preview"
+    }
+  },
+  "131": {
+    "inputs": {
+      "prompt": "3d orbit arround the tubular building,",
+      "model": "veo-3.1-generate-preview",
+      "mode": "image_to_video",
+      "negative_prompt": "",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "gcs_bucket": "christian_veo",
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "duration": "8",
+      "person_generation": "allow_all",
+      "seed": 1104997317710911,
+      "image": [
+        "133",
+        0
+      ]
+    },
+    "class_type": "GeminiVeo31VideoGenerator",
+    "_meta": {
+      "title": "Veo 3.1 Video"
+    }
+  },
+  "133": {
+    "inputs": {
+      "image": "!_nano_ejale_1772302483.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "135": {
+    "inputs": {
+      "image": "!_nano_ejale_1772302483.png",
+      "scribble_data": "",
+      "✏️ Abrir Scribble Editor": "edit"
+    },
+    "class_type": "LoadScribbleImage",
+    "_meta": {
+      "title": "Load Image & Scribble Editor"
     }
   }
 }
