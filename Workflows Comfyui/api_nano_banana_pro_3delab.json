@@ -1,0 +1,86 @@
+{
+  "11": {
+    "inputs": {
+      "image": "ComfyUI_00055_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_1"
+    }
+  },
+  "12": {
+    "inputs": {
+      "image": "ComfyUI_temp_zfvsh_00002_.png [temp]"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_2"
+    }
+  },
+  "103": {
+    "inputs": {
+      "prompt": "el sol atrás del edificio tubular, realista,",
+      "model": "gemini-3-pro-image-preview",
+      "operation": "GENERATE",
+      "api_key": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\APIKEY.txt",
+      "service_account_json": "D:\\NODOS COMFYUI\\ComfyUI-NanoBananaPro\\gen-lang-client-0153159864-10e60e6c5d21.json",
+      "seed": 49934347929185,
+      "aspect_ratio": "16:9",
+      "resolution": "1K",
+      "response_modalities": "IMAGE",
+      "thinking": false,
+      "system_prompt": "You are an expert image-generation engine. You must ALWAYS produce an image.",
+      "images": [
+        "104",
+        0
+      ]
+    },
+    "class_type": "GeminiNanoBananaPro",
+    "_meta": {
+      "title": "Nano Banana Pro (Gemini Direct)"
+    }
+  },
+  "104": {
+    "inputs": {
+      "inputcount": 14,
+      "Update inputs": null,
+      "image_1": [
+        "11",
+        0
+      ],
+      "image_2": [
+        "12",
+        0
+      ],
+      "image_3": [
+        "105",
+        0
+      ]
+    },
+    "class_type": "ImageBatchMulti",
+    "_meta": {
+      "title": "Image Batch Multi"
+    }
+  },
+  "105": {
+    "inputs": {
+      "image": "ComfyUI_temp_zfvsh_00002_.png [temp]"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "image_3"
+    }
+  },
+  "127": {
+    "inputs": {
+      "images": [
+        "103",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  }
+}
