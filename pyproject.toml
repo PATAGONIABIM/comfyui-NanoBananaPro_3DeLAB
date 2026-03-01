@@ -1,7 +1,7 @@
 [project]
 name = "NanoBananaPro3_Direct"
-description = "Gemini 3.1 Flash, Gemini 3 Pro and Vertex AI Imagen 3 Models Node for ComfyUI. image generation | inpaint | outpaint | background swap"
-version = "1.4.0"
+description = "Nano Banana 2 y Veo 3.1 Models Nodes for ComfyUI. image generation: img2img | txt2img | 14 references img2img | inpaint | outpaint | background swap / video generation: img2vid | txt2vid | inpaint | remove | extend | first last frame | 3 reference img2vid. This nodes uses the Gemini API_KEY, the Vertex AI SERVICE_ACCOUNT_JSON and the name of a bucket in Google Cloud Storage to store images and videos for Vertex ai requirements."
+version = "1.4.1"
 license = {file = "LICENSE"} 
 requires-python = ">=3.10"
 dependencies = [

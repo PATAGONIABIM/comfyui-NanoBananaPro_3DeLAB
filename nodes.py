@@ -759,11 +759,11 @@ class GeminiVeo31VideoGenerator:
                     "default": "A cinematic shot of...",
                     "tooltip": "The text description of the video you want to generate."
                 }),
-                "model": (["veo-2.0-generate-preview", "veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"], {
+                "model": (["veo-2.0-generate-preview", "veo-2.0-generate-exp", "veo-3.1-generate-preview", "veo-3.1-fast-generate-preview"], {
                     "default": "veo-3.1-generate-preview",
                     "tooltip": "Select the Veo model. (Note: veo-2.0 is required for inpainting/mask operations in some API versions)."
                 }),
-                "mode": (["text_to_video", "image_to_video", "first_last_frame", "extend_video", "inpaint_insertion", "inpaint_removal"], {
+                "mode": (["text_to_video", "image_to_video", "first_last_frame", "extend_video", "inpaint_insertion", "inpaint_removal", "reference images"], {
                     "default": "text_to_video",
                     "tooltip": "Select the generation mode."
                 }),
@@ -972,11 +972,11 @@ class GeminiVeo31VideoGenerator:
         location = "us-central1"
         client = None
 
-        if service_account_json and mode in ["inpaint_insertion", "inpaint_removal", "extend_video"] and model == "veo-2.0-generate-preview":
+        if service_account_json and ((mode in ["inpaint_insertion", "inpaint_removal", "extend_video"] and model == "veo-2.0-generate-preview") or model == "veo-2.0-generate-exp"):
             if not os.path.exists(service_account_json):
                 return (f"Error: JSON Key file not found at: {service_account_json}", "")
-            if not gcs_bucket:
-                return ("Error: 'gcs_bucket' is required when using Vertex AI (service_account_json).", "")
+            if mode in ["inpaint_insertion", "inpaint_removal"] and not gcs_bucket:
+                return ("Error: 'gcs_bucket' is required when using Vertex AI inpaint modes.", "")
             if not GOOGLE_GENAI_AVAILABLE:
                 return ("Error: 'google-genai' library missing. Install it for Vertex AI.", "")
             
@@ -1000,7 +1000,7 @@ class GeminiVeo31VideoGenerator:
                 print("[NanoBananaPro] Configured for Vertex AI via python SDK.")
             except Exception as e:
                 return (f"Error Initializing Vertex Client: {e}", "")
-        elif not api_key:
+        elif not api_key and model != "veo-2.0-generate-exp":
              return ("Error: API Key is required when not using Vertex AI.", "")
 
         # Helper to convert Tensor [B, H, W, C] to Base64 (RGB/RGBA)
@@ -1038,17 +1038,18 @@ class GeminiVeo31VideoGenerator:
                 return (f"Error: 'mask' node input is required for {mode} mode.", "")
             
             local_vid_path, existing_uri = self.resolve_video_input(video, video_extend_in)
-            if not local_vid_path and not existing_uri:
-                 return (f"Error: Valid 'video' or 'video_extend_in' connection required for Vertex {mode}.", "")
-            
-            video_gcs_uri = existing_uri
-            if local_vid_path:
-                print(f"Vertex Mode: Uploading video {local_vid_path} to GCS...")
-                uploaded_uri, upload_mime = self.upload_file_to_gcs(local_vid_path, gcs_bucket)
-                if uploaded_uri:
-                    video_gcs_uri = uploaded_uri
-                else:
-                    return ("Error: Failed to upload video to GCS.", "")
+            if mode in ["inpaint_insertion", "inpaint_removal", "extend_video"]:
+                if not local_vid_path and not existing_uri:
+                     return (f"Error: Valid 'video' or 'video_extend_in' connection required for Vertex {mode}.", "")
+                
+                video_gcs_uri = existing_uri
+                if local_vid_path:
+                    print(f"Vertex Mode: Uploading video {local_vid_path} to GCS...")
+                    uploaded_uri, upload_mime = self.upload_file_to_gcs(local_vid_path, gcs_bucket)
+                    if uploaded_uri:
+                        video_gcs_uri = uploaded_uri
+                    else:
+                        return ("Error: Failed to upload video to GCS.", "")
 
             # If mode is extend, the config structure in Vertex is slightly different.
             if mode == "extend_video":
@@ -1061,7 +1062,7 @@ class GeminiVeo31VideoGenerator:
                         prompt=prompt if prompt else "extend the video",
                         video=types.Video(uri=video_gcs_uri, mime_type="video/mp4")
                  )
-            else:
+            elif mode in ["inpaint_insertion", "inpaint_removal"]:
                 # Mask needs to go to GCS too for Vertex Veo 2.0 Inpaint
                 temp_mask_path = tensor_to_temp_file(mask[0], prefix="mask")
                 mask_gcs_uri, _ = self.upload_file_to_gcs(temp_mask_path, gcs_bucket)
@@ -1085,6 +1086,49 @@ class GeminiVeo31VideoGenerator:
                             prompt=safe_prompt,
                             video=types.Video(uri=video_gcs_uri, mime_type="video/mp4")
                 )
+            # Veo 2.0 Generation/Reference Images
+            else:
+                config_kwargs = {
+                    "aspect_ratio": aspect_ratio,
+                    "person_generation": person_generation.upper() if person_generation != "allow_adult" else "ALLOW_ADULT",
+                }
+                
+                # gcs_bucket is optional for standard generation, Vertex will return bytes instead if omitted
+                if gcs_bucket:
+                     config_kwargs["output_gcs_uri"] = f"gs://{gcs_bucket}/outputs/"
+                     
+                config = types.GenerateVideosConfig(**config_kwargs)
+                source_kwargs = {"prompt": prompt}
+                
+                if mode == "reference images" and image is not None:
+                     # Upload images to temp files then to GCS for Vertex SDK processing
+                     ref_images = []
+                     for i in range(min(3, image.shape[0])):
+                          temp_img_path = tensor_to_temp_file(image[i], prefix=f"ref_{i}")
+                          # If gcs_bucket provided upload there, else local bytes logic
+                          if gcs_bucket:
+                               img_gcs_uri, _ = self.upload_file_to_gcs(temp_img_path, gcs_bucket)
+                               if img_gcs_uri:
+                                   ref_images.append(
+                                        types.VideoGenerationReferenceImage(
+                                             image=types.Image(gcs_uri=img_gcs_uri, mime_type="image/png"),
+                                             reference_type="ASSET"
+                                        )
+                                   )
+                          else:
+                               # Send inline bytes via the types.Image class
+                               with open(temp_img_path, "rb") as f:
+                                   ref_images.append(
+                                       types.VideoGenerationReferenceImage(
+                                            image=types.Image(image_bytes=f.read()),
+                                            reference_type="ASSET"
+                                       )
+                                   )
+                     
+                     if ref_images:
+                          config.reference_images = ref_images
+                          
+                source = types.GenerateVideosSource(**source_kwargs)
             
             print("Sending generation request to Vertex AI Veo 2.0...")
             try:
@@ -1096,36 +1140,72 @@ class GeminiVeo31VideoGenerator:
                 )
                 
                 print("Vertex AI Processing began. Waiting for completion...")
-                while not operation.done:
-                    time.sleep(15)
-                    operation = client.operations.get(operation)
-                    print("Status update:", getattr(operation, "name", "Polling..."))
+                print("Vertex AI Processing began. Waiting for completion...")
+                # In google-genai, if generate_videos() didn't block and returned an operation:
+                # we wait. But wait, generate_videos() in google-genai v0.3 *blocks* until done by default!
+                # If it returned, it might already be done or failed. Let's inspect the returned object safely.
+                if hasattr(operation, "done") and not operation.done:
+                    is_done = False
+                    while not is_done:
+                         time.sleep(15)
+                         op_info = client.operations.get(operation=operation)
+                         
+                         if op_info.done:
+                              is_done = True
+                              operation = op_info # Final State
+                              print(f"Vertex SDK Polling: Done!")
+                         else:
+                              print(f"Status update: Polling operation details...")
+                else:
+                    print("Vertex SDK Polling: Done!")
                 
-                if operation.response:
-                    out_uri = operation.result.generated_videos[0].video.uri
-                    print(f"Vertex AI Generation Complete! Output URI: {out_uri}")
-                    
+                if hasattr(operation, 'error') and operation.error:
+                    print(f"Vertex SDK Error Details: {operation.error}")
+                    return (f"Vertex AI Error: {operation.error}", "")
+
+                if hasattr(operation, 'result') and operation.result and hasattr(operation.result, 'generated_videos') and operation.result.generated_videos:
+                    out_uri = "local_bytes"
                     # Download from GCS to ComfyUI Output directory
                     try:
-                        from google.cloud import storage
-                        out_bucket_name = out_uri.split("gs://")[1].split("/")[0]
-                        out_blob_name = out_uri.split(f"gs://{out_bucket_name}/")[1]
+                        out_uri = "local_bytes"
+                        # Handle case where it returned GCS URI Check
+                        if hasattr(operation.result.generated_videos[0], 'video') and hasattr(operation.result.generated_videos[0].video, 'uri'):
+                            out_uri = operation.result.generated_videos[0].video.uri
+                            print(f"Vertex AI Generation Complete! Output URI: {out_uri}")
+                            
+                            from google.cloud import storage
+                            out_bucket_name = out_uri.split("gs://")[1].split("/")[0]
+                            out_blob_name = out_uri.split(f"gs://{out_bucket_name}/")[1]
+                            
+                            dl_client = storage.Client()
+                            dl_bucket = dl_client.bucket(out_bucket_name)
+                            dl_blob = dl_bucket.blob(out_blob_name)
+                            
+                            output_dir = folder_paths.get_output_directory()
+                            local_filename = f"veo20_{mode}_{int(time.time())}.mp4"
+                            local_out_path = os.path.join(output_dir, local_filename)
+                            
+                            print(f"Downloading {out_uri} to {local_out_path}...")
+                            dl_blob.download_to_filename(local_out_path)
+                            print("Download complete!")
+                            return (local_out_path, out_uri)
+
+                        # Handle inline bytes if not GCS
+                        elif hasattr(operation.result.generated_videos[0], 'video') and hasattr(operation.result.generated_videos[0].video, 'video_bytes'):
+                            output_dir = folder_paths.get_output_directory()
+                            local_filename = f"veo20_{mode}_{int(time.time())}.mp4"
+                            local_out_path = os.path.join(output_dir, local_filename)
+                            print(f"Saving returned inline bytes to {local_out_path}...")
+                            with open(local_out_path, "wb") as f:
+                                f.write(operation.result.generated_videos[0].video.video_bytes)
+                            return (local_out_path, local_out_path)
+                            
+                            
+                        else:
+                             return ("Error: Could not parse video URI or bytes from Vertex response.", "")
                         
-                        dl_client = storage.Client()
-                        dl_bucket = dl_client.bucket(out_bucket_name)
-                        dl_blob = dl_bucket.blob(out_blob_name)
-                        
-                        output_dir = folder_paths.get_output_directory()
-                        local_filename = f"veo20_inpaint_{int(time.time())}.mp4"
-                        local_out_path = os.path.join(output_dir, local_filename)
-                        
-                        print(f"Downloading {out_uri} to {local_out_path}...")
-                        dl_blob.download_to_filename(local_out_path)
-                        print("Download complete!")
-                        
-                        return (local_out_path, out_uri)
                     except Exception as dl_e:
-                        print(f"Error downloading from GCS: {dl_e}")
+                        print(f"Error downloading from Vertex response: {dl_e}")
                         return (out_uri, out_uri) # Fallback to string if download fails
                         
                 else:
@@ -1137,12 +1217,7 @@ class GeminiVeo31VideoGenerator:
                 return (f"Exception calling Vertex AI: {e}", "")
 
         # --- Standard REST API Execution (Veo 3.1) ---
-        base_url = "https://generativelanguage.googleapis.com/v1beta"
-        url = f"{base_url}/models/{model}:predictLongRunning"
-        headers = {
-            "Content-Type": "application/json", 
-            "x-goog-api-key": api_key
-        }
+        is_vertex_rest = False
 
         # Build constraints
         if resolution in ["1080p", "4k"] or mode == "extend_video":
@@ -1253,6 +1328,26 @@ class GeminiVeo31VideoGenerator:
             if person_generation == "allow_all":
                 parameters["personGeneration"] = "allow_adult"
 
+        elif mode == "reference images":
+            if model not in ["veo-2.0-generate-exp", "veo-3.1-generate-preview"]:
+                return (f"Error: 'reference images' mode is only supported with 'veo-2.0-generate-exp' and 'veo-3.1-generate-preview'. Current model is '{model}'.", "")
+            if image is None:
+                return ("Error: 'image' input is required for 'reference images' mode.", "")
+            
+            instance["referenceImages"] = []
+            for i in range(min(3, image.shape[0])):
+                img_b64 = tensor_to_b64(image[i])
+                instance["referenceImages"].append({
+                    "image": {
+                        "bytesBase64Encoded": img_b64,
+                        "mimeType": "image/png"
+                    },
+                    "referenceType": "asset"
+                })
+            print(f"[NanoBananaPro] Added {len(instance['referenceImages'])} reference images.")
+            if person_generation == "allow_all":
+                parameters["personGeneration"] = "allow_adult"
+
         elif mode == "first_last_frame":
 
             if image is None or last_frame is None:
@@ -1316,7 +1411,17 @@ class GeminiVeo31VideoGenerator:
             print(f"Operation started: {operation_name}")
             
             # Polling
-            poll_url = f"{base_url}/{operation_name}"
+            if is_vertex_rest:
+                # Vertex returns operation_name as "projects/.../locations/.../publishers/.../models/.../operations/..."
+                # The correct polling endpoint for these LRO operations is just appending the operation name directly to the base URL
+                # OR using the global operations endpoint. Let's try the operations endpoint specifically.
+                # Actually, the base url is `https://{location}-aiplatform.googleapis.com/v1` and the returned name is the FULL relative path.
+                import re
+                poll_op_name = re.sub(r'publishers/[^/]+/models/[^/]+/', '', operation_name)
+                poll_url = f"https://us-central1-aiplatform.googleapis.com/v1/{poll_op_name}"
+            else:
+                poll_url = f"{base_url}/{operation_name}"
+                
             is_done = False
             video_uri = None
             
