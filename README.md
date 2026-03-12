@@ -6,13 +6,13 @@ Este es un **nodo personalizado para ComfyUI** que integra los modelos **Gemini*
 
 ---
 
-## 🇺🇸 English (v1.4.1)
+## 🇺🇸 English (v1.4.2)
 
 ### Features
 - **Nano Banana 2 & Veo 3.1 Integration**: State-of-the-art models for image and video generation in ComfyUI.
 - **Image Generation**: Supports `txt2img`, `img2img`, and up to **14 visual references** for `img2img`.
 - **Image Editing (Imagen 3 / Vertex AI)**: Advanced tasks including Inpainting, Outpainting, and Background Swap.
-- **Video Generation (Veo 3.1 / 2.0)**: Supports `txt2vid`, `img2vid`, and **NEW (v1.4.1): 3 reference `img2vid`** using Veo 2.0 via Vertex AI.
+- **Video Generation (Veo 3.1 / 2.0)**: Supports `txt2vid`, `img2vid`, and **NEW (v1.4.2): 3 reference `img2vid`** using Veo 2.0 via Vertex AI.
 - **Video Editing (Vertex AI)**: Seamlessly Inpaint objects into videos, Remove objects, Extend clips, or generate First/Last frame interpolations.
 - **Google Cloud Storage (GCS) Integration**: Auto-uploads local `.mp4` files and reference images directly to your specified GCS Bucket for Vertex AI tasks.
 - **Utility Nodes**: Includes `Load Video (Extract Frame)` and `Load Image (Passthrough)` with JS automation (`!_nano_` prefix) to pipe auto-extracted frames straight into ComfyUI's native Mask Editor.
@@ -66,13 +66,13 @@ To use the node, you need to provide authentication credentials in the node inpu
 
 ---
 
-## 🇪🇸 Español (v1.4.1)
+## 🇪🇸 Español (v1.4.2)
 
 ### Características
 - **Integración Nano Banana 2 & Veo 3.1**: Modelos de última generación para creación de imágenes y video en ComfyUI.
 - **Generación de Imágenes**: Soporta `txt2img`, `img2img`, y hasta **14 referencias visuales** para `img2img`.
 - **Edición de Imágenes (Imagen 3 / Vertex AI)**: Tareas avanzadas incluyendo Inpainting, Outpainting y Cambio de Fondo.
-- **Generación de Video (Veo 3.1 / 2.0)**: Soporta `txt2vid`, `img2vid` y **NUEVO (v1.4.1): 3 referencias para `img2vid`** usando Veo 2.0 vía Vertex AI.
+- **Generación de Video (Veo 3.1 / 2.0)**: Soporta `txt2vid`, `img2vid` y **NUEVO (v1.4.2): 3 referencias para `img2vid`** usando Veo 2.0 vía Vertex AI.
 - **Edición de Video (Vertex AI)**: Inserta objetos en videos de forma fluida (Inpaint), Remueve objetos, Extiende clips, o genera interpolación de Primer/Último frame.
 - **Integración con Google Cloud Storage (GCS)**: Subida automática de archivos `.mp4` p locales e imágenes de referencia directamente al Bucket GCS especificado para las tareas de Vertex AI.
 - **Nodos de Utilidad**: Incluye Nodos `Load Video (Extract Frame)` y `Load Image (Passthrough)` con automatización JS (prefijo `!_nano_`) para enviar frames extraídos automáticamente al Mask Editor nativo de ComfyUI.

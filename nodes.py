@@ -326,12 +326,8 @@ class GeminiNanoBananaPro:
                 if images is None:
                      return (torch.zeros((1, 64, 64, 3)), "Error: Input image required for editing.")
                 
-                 # Prepare Inputs
-                if images is None:
-                     return (torch.zeros((1, 64, 64, 3)), "Error: Input image required for editing.")
-                
                 # --- FIX: Pass image bytes wrapped in types.Image for RawReferenceImage ---
-                raw_ref_bytes = tensor_to_bytes(images[0])
+                raw_ref_bytes, _ = tensor_to_bytes(images[0])
                 raw_ref_image_type = types.Image(image_bytes=raw_ref_bytes)
 
                 raw_ref = RawReferenceImage(
@@ -1218,6 +1214,13 @@ class GeminiVeo31VideoGenerator:
 
         # --- Standard REST API Execution (Veo 3.1) ---
         is_vertex_rest = False
+        
+        base_url = "https://generativelanguage.googleapis.com/v1beta"
+        url = f"{base_url}/models/{model}:predictLongRunning"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key
+        }
 
         # Build constraints
         if resolution in ["1080p", "4k"] or mode == "extend_video":
